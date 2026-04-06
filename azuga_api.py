@@ -30,6 +30,7 @@ def authenticate():
     if _token_cache["token"] and now < _token_cache["expires_at"]:
         return _token_cache["token"]
 
+    print(f"[Azuga] Authenticating to {AZUGA_AUTH_URL} ...")
     resp = requests.post(
         AZUGA_AUTH_URL,
         json={
@@ -39,6 +40,7 @@ def authenticate():
         },
         timeout=15,
     )
+    print(f"[Azuga] Auth response: {resp.status_code}")
     resp.raise_for_status()
     data = resp.json()
 
@@ -107,9 +109,13 @@ def get_latest_locations():
     """
     def _fetch():
         url = f"{VEHICLES_BASE}/vehicles/latestlocation"
-        return _retry_on_401(
+        print(f"[Azuga] Fetching latest locations ...")
+        result = _retry_on_401(
             lambda: requests.post(url, headers=_headers(), json={}, timeout=30)
         )
+        vcount = len(result.get("data", {}).get("result", [])) if isinstance(result, dict) else "?"
+        print(f"[Azuga] Got {vcount} vehicles")
+        return result
     return _cached("latest_locations", 30, _fetch)
 
 

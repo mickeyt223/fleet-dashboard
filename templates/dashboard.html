@@ -726,11 +726,26 @@ document.querySelectorAll('.tab').forEach(tab => {
 // ── Vehicle Loading ────────────────────────────────────────────
 async function loadLocations() {
     try {
-        const resp = await fetch('/api/locations');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
+        const resp = await fetch('/api/locations', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        // If redirected to login page or got non-JSON response
+        if (resp.redirected || resp.url.includes('/login')) {
+            window.location.href = '/login';
+            return;
+        }
+        if (!resp.ok) {
+            throw new Error(`API returned ${resp.status}`);
+        }
+
         const data = await resp.json();
 
         if (data.error) {
             document.getElementById('connectionStatus').innerHTML = '<span style="color:#ef4444">&#9679;</span> Error: ' + data.error;
+            document.getElementById('vehicleList').innerHTML =
+                '<div class="loading" style="color:#ef4444">Error: ' + data.error + '</div>';
             return;
         }
 
@@ -774,6 +789,8 @@ async function loadLocations() {
     } catch (err) {
         document.getElementById('connectionStatus').innerHTML =
             '<span style="color:#ef4444">&#9679;</span> Connection failed';
+        document.getElementById('vehicleList').innerHTML =
+            '<div class="loading" style="color:#ef4444">Failed to load fleet data. Will retry in 30s...</div>';
         console.error('Location fetch error:', err);
     }
 }
@@ -1567,6 +1584,14 @@ loadLocations();
 startAutoRefresh();
 loadYardReport();
 loadGasReport();
+
+// Show slow-load hint after 10 seconds
+setTimeout(() => {
+    const vl = document.getElementById('vehicleList');
+    if (vl && vl.querySelector('.loading') && vl.querySelector('.loading').textContent.includes('Loading fleet')) {
+        vl.querySelector('.loading').innerHTML = 'Still loading fleet data&hellip;<br><small style="color:#666">Azuga API may be slow. Please wait.</small>';
+    }
+}, 10000);
 </script>
 
 </body>
