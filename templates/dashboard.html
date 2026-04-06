@@ -790,7 +790,7 @@ async function loadLocations() {
         document.getElementById('connectionStatus').innerHTML =
             '<span style="color:#ef4444">&#9679;</span> Connection failed';
         document.getElementById('vehicleList').innerHTML =
-            '<div class="loading" style="color:#ef4444">Failed to load fleet data. Will retry in 30s...</div>';
+            '<div class="loading" style="color:#ef4444">Failed to load fleet data. Will retry in 30s...<br><small style="color:#888">' + err.message + '</small></div>';
         console.error('Location fetch error:', err);
     }
 }

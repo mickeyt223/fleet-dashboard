@@ -217,6 +217,18 @@ def healthz():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/debug-locations")
+def debug_locations():
+    """Debug endpoint — test Azuga API connectivity (no auth)."""
+    try:
+        data = azuga_api.get_latest_locations()
+        vdata = data.get("data", {}) if isinstance(data, dict) else {}
+        vlist = vdata.get("result", []) if isinstance(vdata, dict) else []
+        return jsonify({"status": "ok", "vehicle_count": len(vlist)})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/api/locations")
 @login_required
 def api_locations():
