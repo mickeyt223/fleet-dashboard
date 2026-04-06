@@ -28,6 +28,8 @@ def _set_cached_report(key, data):
 app = Flask(__name__)
 app.secret_key = "mtscapes-fleet-dashboard-2026"
 
+models.init_db()
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
