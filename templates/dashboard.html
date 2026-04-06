@@ -387,6 +387,115 @@
             50% { box-shadow: 0 0 12px currentColor; }
             100% { box-shadow: 0 0 4px currentColor; }
         }
+
+        /* ── Mobile toggle button ──────────────────────── */
+        .mobile-toggle {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            border-radius: 30px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        /* ── Mobile responsive ─────────────────────────── */
+        @media (max-width: 768px) {
+            .header {
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .header h1 { font-size: 16px; }
+            .header .status { font-size: 11px; }
+            .header > div:last-child { gap: 8px !important; }
+            .header > div:last-child span { display: none; }
+            .header > div:last-child a { font-size: 11px; padding: 3px 8px; }
+
+            .tabs {
+                padding: 0 8px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab {
+                padding: 8px 12px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
+
+            .main {
+                flex-direction: column;
+                height: calc(100vh - 82px);
+                position: relative;
+            }
+
+            .map-container {
+                flex: 1;
+                min-height: 0;
+                order: 1;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: 45vh;
+                border-right: none;
+                border-top: 2px solid #4ade80;
+                order: 2;
+                position: relative;
+            }
+
+            .sidebar.collapsed {
+                height: 0;
+                overflow: hidden;
+                border-top: none;
+            }
+
+            .sidebar.expanded {
+                height: calc(100vh - 82px);
+                position: relative;
+                z-index: 1500;
+                border-radius: 0;
+            }
+
+            .mobile-toggle { display: block; }
+            .sidebar.collapsed + .map-container ~ .mobile-toggle,
+            .mobile-toggle { display: block; }
+
+            /* Wider touch targets */
+            .vehicle-item { padding: 14px 12px; gap: 10px; }
+            .vehicle-name { font-size: 15px; }
+            .vehicle-detail { font-size: 13px; }
+            .vehicle-icon { width: 32px; height: 32px; font-size: 14px; }
+
+            .div-pill { padding: 5px 12px; font-size: 12px; }
+            .division-filters { padding: 8px 12px; gap: 4px; }
+
+            /* Yard report */
+            .yard-summary { padding: 12px; }
+            .yard-stat .val { font-size: 18px; }
+            .yard-stat { padding: 8px; }
+            .yard-truck-row { padding: 8px 12px; }
+
+            /* Gas report */
+            .gas-summary { padding: 12px; }
+            .gas-stat .val { font-size: 18px; }
+            .gas-stat { padding: 8px; }
+
+            /* Map legend — smaller on mobile */
+            .map-legend { bottom: 60px; font-size: 10px; padding: 6px 10px; }
+            .refresh-bar { top: 6px; right: 6px; font-size: 11px; }
+
+            /* Leaflet controls */
+            .leaflet-control-layers { top: 40px !important; }
+        }
     </style>
 </head>
 <body>
@@ -545,6 +654,8 @@
     </div>
 </div>
 
+<button class="mobile-toggle" id="mobileToggle" onclick="toggleMobileSidebar()">Show Map</button>
+
 <script>
 // ── State ──────────────────────────────────────────────────────
 let map, vehicleMarkers = {}, allVehicles = [], selectedVehicleId = null;
@@ -576,6 +687,23 @@ document.querySelectorAll('.tab').forEach(tab => {
         document.querySelectorAll('.sidebar > .tab-content').forEach(c => c.classList.remove('visible'));
         tab.classList.add('active');
         document.getElementById('tab-' + tab.dataset.tab).classList.add('visible');
+
+        // On mobile, ensure sidebar is visible when switching tabs
+        if (window.innerWidth <= 768) {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.classList.remove('collapsed');
+            const btn = document.getElementById('mobileToggle');
+            if (tab.dataset.tab === 'live-map') {
+                sidebar.classList.remove('expanded');
+                btn.textContent = 'Show Map';
+                btn.style.display = 'block';
+            } else {
+                // Report tabs: expand sidebar fully, hide toggle
+                sidebar.classList.add('expanded');
+                btn.style.display = 'none';
+            }
+            setTimeout(() => map.invalidateSize(), 100);
+        }
 
         clearMapOverlays();
 
@@ -842,6 +970,7 @@ function selectVehicle(vehicleId, sourceList) {
     // Load today's breadcrumb on live map
     if (sourceList === 'vehicleList') {
         loadBreadcrumbDots(vehicleId);
+        mobileShowMap();
     }
 }
 
@@ -1113,6 +1242,31 @@ function toggleYardExpand(id) {
 }
 
 // ── Auto-Refresh ───────────────────────────────────────────────
+// ── Mobile sidebar toggle ─────────────────────────────────────
+function toggleMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const btn = document.getElementById('mobileToggle');
+    sidebar.classList.remove('expanded');
+    if (sidebar.classList.contains('collapsed')) {
+        sidebar.classList.remove('collapsed');
+        btn.textContent = 'Show Map';
+    } else {
+        sidebar.classList.add('collapsed');
+        btn.textContent = 'Show Trucks';
+    }
+    setTimeout(() => map.invalidateSize(), 100);
+}
+
+// When a truck is selected on mobile, collapse sidebar to show map
+function mobileShowMap() {
+    if (window.innerWidth <= 768) {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.classList.add('collapsed');
+        document.getElementById('mobileToggle').textContent = 'Show Trucks';
+        setTimeout(() => map.invalidateSize(), 100);
+    }
+}
+
 function startAutoRefresh() {
     stopAutoRefresh();
     countdownValue = 30;
