@@ -222,9 +222,10 @@ def debug_locations():
     """Debug endpoint — test Azuga API connectivity (no auth)."""
     try:
         data = azuga_api.get_latest_locations()
-        vdata = data.get("data", {}) if isinstance(data, dict) else {}
-        vlist = vdata.get("result", []) if isinstance(vdata, dict) else []
-        return jsonify({"status": "ok", "vehicle_count": len(vlist)})
+        return jsonify({"status": "ok", "type": type(data).__name__,
+                        "keys": list(data.keys()) if isinstance(data, dict) else "N/A",
+                        "length": len(data) if isinstance(data, list) else "N/A",
+                        "sample": str(data)[:500]})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
