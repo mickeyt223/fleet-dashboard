@@ -36,13 +36,12 @@ def init_db():
         );
     """)
 
-    # Seed default admin if no users exist
-    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if count == 0:
-        conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, is_admin) VALUES (?, ?, ?, ?)",
-            ("admin", generate_password_hash("admin"), "Administrator", 1),
-        )
+    # Seed default admin if not exists
+    conn.execute(
+        "INSERT OR IGNORE INTO users (username, password_hash, display_name, is_admin) VALUES (?, ?, ?, ?)",
+        ("admin", generate_password_hash("admin"), "Administrator", 1),
+    )
+    if conn.total_changes > 0:
         print("Default admin user created (username: admin, password: admin)")
 
     conn.commit()
