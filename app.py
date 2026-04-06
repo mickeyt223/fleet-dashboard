@@ -65,6 +65,19 @@ def _user_can_access_vehicle(vehicle_id):
     return vehicle_id in (allowed or [])
 
 
+def _extract_vehicle_list(data):
+    """Extract vehicle list from Azuga response (handles both dict and list shapes)."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        vdata = data.get("data", {})
+        if isinstance(vdata, dict):
+            return vdata.get("result", [])
+        if isinstance(vdata, list):
+            return vdata
+    return []
+
+
 def _filter_vehicles_for_user(vehicle_list, id_key="trackeeId"):
     """Filter a vehicle list to only those the current user can access."""
     if current_user.is_admin:
@@ -185,8 +198,7 @@ def admin_set_user_vehicles(user_id):
 def api_all_vehicles():
     """Full vehicle list for admin vehicle assignment."""
     data = azuga_api.get_latest_locations()
-    vdata = data.get("data", {})
-    vlist = vdata.get("result", []) if isinstance(vdata, dict) else vdata if isinstance(vdata, list) else []
+    vlist = _extract_vehicle_list(data)
     result = []
     for v in vlist:
         result.append({
@@ -222,10 +234,9 @@ def debug_locations():
     """Debug endpoint — test Azuga API connectivity (no auth)."""
     try:
         data = azuga_api.get_latest_locations()
-        return jsonify({"status": "ok", "type": type(data).__name__,
-                        "keys": list(data.keys()) if isinstance(data, dict) else "N/A",
-                        "length": len(data) if isinstance(data, list) else "N/A",
-                        "sample": str(data)[:500]})
+        vlist = _extract_vehicle_list(data)
+        return jsonify({"status": "ok", "vehicle_count": len(vlist),
+                        "response_type": type(data).__name__})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -236,9 +247,8 @@ def api_locations():
     """Return latest GPS positions for all vehicles."""
     try:
         data = azuga_api.get_latest_locations()
-        # Filter vehicles for non-admin users
-        vdata = data.get("data", {})
-        vlist = vdata.get("result", []) if isinstance(vdata, dict) else vdata if isinstance(vdata, list) else []
+        # Handle both dict and list responses from Azuga
+        vlist = _extract_vehicle_list(data)
         filtered = _filter_vehicles_for_user(vlist)
         return jsonify({"data": {"result": filtered}})
     except Exception as e:
@@ -354,10 +364,7 @@ def api_yard_departure():
     try:
         # Get all vehicle IDs
         vraw = azuga_api.get_latest_locations()
-        vdata = vraw.get("data", {}) if isinstance(vraw, dict) else {}
-        vlist = vdata.get("result", []) if isinstance(vdata, dict) else (
-            vdata if isinstance(vdata, list) else []
-        )
+        vlist = _extract_vehicle_list(vraw)
         vlist = _filter_vehicles_for_user(vlist)
 
         MAINT_GROUPS = {
@@ -590,10 +597,7 @@ def api_gas_parking_stops():
 
     try:
         vraw = azuga_api.get_latest_locations()
-        vdata = vraw.get("data", {}) if isinstance(vraw, dict) else {}
-        vlist = vdata.get("result", []) if isinstance(vdata, dict) else (
-            vdata if isinstance(vdata, list) else []
-        )
+        vlist = _extract_vehicle_list(vraw)
         vlist = _filter_vehicles_for_user(vlist)
 
         MAINT_GROUPS = {
