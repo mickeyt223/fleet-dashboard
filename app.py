@@ -232,13 +232,17 @@ def healthz():
 @app.route("/api/debug-locations")
 def debug_locations():
     """Debug endpoint — test Azuga API connectivity (no auth)."""
+    import traceback
     try:
         data = azuga_api.get_latest_locations()
         vlist = _extract_vehicle_list(data)
         return jsonify({"status": "ok", "vehicle_count": len(vlist),
                         "response_type": type(data).__name__})
     except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(f"[DEBUG] locations error:\n{tb}")
+        return jsonify({"status": "error", "error": str(e),
+                        "traceback": tb.split("\n")[-4:]}), 500
 
 
 @app.route("/api/locations")

@@ -43,9 +43,23 @@ def authenticate():
     print(f"[Azuga] Auth response: {resp.status_code}")
     resp.raise_for_status()
     data = resp.json()
+    print(f"[Azuga] Auth response type: {type(data).__name__}")
 
-    # Azuga nests the token under "data"
-    inner = data.get("data", data)
+    # Azuga nests the token under "data" — handle both dict and list
+    if isinstance(data, list):
+        # Some Azuga endpoints return a list; try first element
+        if data and isinstance(data[0], dict):
+            inner = data[0]
+        else:
+            raise ValueError(f"Auth returned unexpected list: {str(data)[:200]}")
+    elif isinstance(data, dict):
+        inner = data.get("data", data)
+        # If inner is also a dict, use it; otherwise fall back to data
+        if not isinstance(inner, dict):
+            inner = data
+    else:
+        raise ValueError(f"Auth returned unexpected type {type(data)}: {str(data)[:200]}")
+
     token = (
         inner.get("access_token")
         or inner.get("accessToken")
@@ -53,7 +67,7 @@ def authenticate():
         or inner.get("Token")
     )
     if not token:
-        raise ValueError(f"Could not extract token from auth response: {data}")
+        raise ValueError(f"Could not extract token from auth response: {str(data)[:300]}")
 
     # Token expires_in is ~180 days, but cache for 23 hours to be safe
     _token_cache["token"] = token
