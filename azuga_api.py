@@ -127,7 +127,18 @@ def get_latest_locations():
         result = _retry_on_401(
             lambda: requests.post(url, headers=_headers(), json={}, timeout=30)
         )
-        vcount = len(result.get("data", {}).get("result", [])) if isinstance(result, dict) else "?"
+        if isinstance(result, dict):
+            inner = result.get("data", {})
+            if isinstance(inner, dict):
+                vcount = len(inner.get("result", []))
+            elif isinstance(inner, list):
+                vcount = len(inner)
+            else:
+                vcount = "?"
+        elif isinstance(result, list):
+            vcount = len(result)
+        else:
+            vcount = "?"
         print(f"[Azuga] Got {vcount} vehicles")
         return result
     return _cached("latest_locations", 30, _fetch)
