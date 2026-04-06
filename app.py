@@ -211,6 +211,12 @@ def api_vehicles():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/healthz")
+def healthz():
+    """Health check / keep-alive endpoint (no auth required)."""
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/locations")
 @login_required
 def api_locations():
@@ -325,6 +331,13 @@ def api_yard_departure():
     Filters out named/manager trucks (only returns 'Truck XX' vehicles).
     """
     num_days = int(request.args.get("days", 5))
+
+    # Check report cache first (5 minutes for admin, keyed by user for non-admin)
+    cache_key = f"yard:{current_user.id}:{num_days}"
+    cached = _get_cached_report(cache_key, 300)
+    if cached:
+        return jsonify(cached)
+
     try:
         # Get all vehicle IDs
         vraw = azuga_api.get_latest_locations()
@@ -532,7 +545,7 @@ def api_yard_departure():
                 "total_avg_hours": round(total_min / 60, 1),
             })
 
-        return jsonify({
+        result = {
             "trucks": report,
             "yards": yard_summary,
             "fleet_avg_minutes": fleet_avg,
@@ -540,7 +553,9 @@ def api_yard_departure():
             "total_crew_hours": round(total_wasted / 60, 1),
             "truck_count": len(report),
             "days_analyzed": [d.strftime("%a %m/%d") for d in days],
-        })
+        }
+        _set_cached_report(cache_key, result)
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -553,6 +568,13 @@ def api_gas_parking_stops():
     Finds all stops at gas stations or parking lots across the fleet.
     """
     num_days = int(request.args.get("days", 5))
+
+    # Check report cache first (5 minutes)
+    cache_key = f"gas:{current_user.id}:{num_days}"
+    cached = _get_cached_report(cache_key, 300)
+    if cached:
+        return jsonify(cached)
+
     try:
         vraw = azuga_api.get_latest_locations()
         vdata = vraw.get("data", {}) if isinstance(vraw, dict) else {}
@@ -698,7 +720,7 @@ def api_gas_parking_stops():
         total_gas_min = sum(s["dwell_minutes"] for s in gas_stops)
         total_parking_min = sum(s["dwell_minutes"] for s in parking_stops)
 
-        return jsonify({
+        result = {
             "stops": all_stops,
             "summary": {
                 "gas_count": len(gas_stops),
@@ -710,7 +732,9 @@ def api_gas_parking_stops():
             },
             "days_analyzed": [d.strftime("%a %m/%d") for d in days],
             "truck_count": len(set(s["truck"] for s in all_stops)),
-        })
+        }
+        _set_cached_report(cache_key, result)
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

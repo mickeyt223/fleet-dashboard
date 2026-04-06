@@ -1582,8 +1582,8 @@ document.getElementById('gasTruckSearch').addEventListener('input', (e) => {
 initMap();
 loadLocations();
 startAutoRefresh();
-loadYardReport();
-loadGasReport();
+// Yard and gas reports load on-demand when tab is clicked (not at boot)
+// This avoids 700+ simultaneous Azuga API calls on page load
 
 // Show slow-load hint after 10 seconds
 setTimeout(() => {
