@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+fleet_users.db
+yard_debug*.py
+yard_debug*.py
+yard_departure_analysis.py
+yard_address_check.py
+start-dashboard.bat

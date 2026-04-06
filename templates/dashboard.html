@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTScapes Fleet Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; }
+
+        /* ── Header ─────────────────────────────────────── */
+        .header {
+            background: #1a1d27;
+            border-bottom: 1px solid #2a2d3a;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { font-size: 20px; font-weight: 600; color: #fff; }
+        .header h1 span { color: #4ade80; }
+        .header .status { font-size: 13px; color: #888; }
+        .header .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; margin-right: 6px; }
+
+        /* ── Tabs ───────────────────────────────────────── */
+        .tabs {
+            background: #1a1d27;
+            padding: 0 24px;
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #2a2d3a;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #888;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: #ccc; }
+        .tab.active { color: #4ade80; border-bottom-color: #4ade80; }
+
+        /* ── Layout ─────────────────────────────────────── */
+        .main { display: flex; height: calc(100vh - 90px); }
+        .sidebar {
+            width: 340px;
+            background: #1a1d27;
+            border-right: 1px solid #2a2d3a;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .map-container { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; }
+
+        /* ── Sidebar items ──────────────────────────────── */
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #2a2d3a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-header input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            outline: none;
+        }
+        .sidebar-header input:focus { border-color: #4ade80; }
+
+        .vehicle-list { padding: 4px 0; }
+        .vehicle-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #1f2230;
+            transition: background 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .vehicle-item:hover { background: #22253a; }
+        .vehicle-item.active { background: #1b2a1f; border-left: 3px solid #4ade80; }
+
+        .vehicle-icon {
+            width: 36px; height: 36px;
+            background: #2a2d3a;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .vehicle-info { flex: 1; min-width: 0; }
+        .vehicle-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vehicle-detail { font-size: 12px; color: #888; margin-top: 2px; }
+        .vehicle-speed { font-size: 12px; font-weight: 600; text-align: right; }
+        .vehicle-speed.moving { color: #4ade80; }
+        .vehicle-speed.off { color: #facc15; }
+
+        /* ── Detail Panel (replaces sidebar content) ──── */
+        .detail-panel { display: none; }
+        .detail-panel.visible { display: block; }
+        .detail-back {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #4ade80;
+            border-bottom: 1px solid #2a2d3a;
+        }
+        .detail-back:hover { background: #22253a; }
+
+        .detail-header {
+            padding: 16px;
+            border-bottom: 1px solid #2a2d3a;
+        }
+        .detail-header h2 { font-size: 16px; color: #fff; }
+        .detail-header p { font-size: 12px; color: #888; margin-top: 4px; }
+
+        .detail-controls {
+            padding: 12px 16px;
+            border-bottom: 1px solid #2a2d3a;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .detail-controls input[type="date"] {
+            padding: 6px 10px;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 12px;
+        }
+        .detail-controls select {
+            padding: 6px 10px;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 12px;
+        }
+        .btn {
+            padding: 6px 14px;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn:hover { background: #22c55e; }
+
+        .stop-list { padding: 4px 0; }
+        .stop-item {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1f2230;
+            cursor: pointer;
+        }
+        .stop-item:hover { background: #22253a; }
+        .stop-address { font-size: 13px; color: #e0e0e0; }
+        .stop-meta { font-size: 12px; color: #888; margin-top: 3px; display: flex; gap: 16px; }
+        .stop-dwell { color: #f59e0b; font-weight: 600; }
+
+        /* ── Trip History Tab ────────────────────────────── */
+        .trip-item {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1f2230;
+            cursor: pointer;
+        }
+        .trip-item:hover { background: #22253a; }
+        .trip-route { font-size: 13px; color: #e0e0e0; }
+        .trip-meta { font-size: 12px; color: #888; margin-top: 3px; display: flex; gap: 16px; }
+
+        /* ── Yard Report ────────────────────────────────── */
+        .yard-summary {
+            padding: 16px;
+            border-bottom: 1px solid #2a2d3a;
+        }
+        .yard-stat-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .yard-stat {
+            flex: 1;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .yard-stat .val {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f59e0b;
+        }
+        .yard-stat .label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .yard-truck-row {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1f2230;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .yard-truck-row:hover { background: #22253a; }
+        .yard-rank {
+            width: 24px;
+            font-size: 12px;
+            color: #888;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .yard-truck-name {
+            flex: 1;
+            font-size: 13px;
+            color: #fff;
+            font-weight: 600;
+        }
+        .yard-avg {
+            font-size: 14px;
+            font-weight: 700;
+            text-align: right;
+            min-width: 60px;
+        }
+        .yard-avg.red { color: #ef4444; }
+        .yard-avg.orange { color: #f59e0b; }
+        .yard-avg.green { color: #4ade80; }
+        .yard-days {
+            font-size: 11px;
+            color: #888;
+            min-width: 30px;
+            text-align: right;
+        }
+        .yard-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: #2a2d3a;
+            border-radius: 3px;
+            overflow: hidden;
+            min-width: 40px;
+            max-width: 80px;
+        }
+        .yard-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+        .yard-expand {
+            padding: 4px 16px 12px 50px;
+            font-size: 11px;
+            color: #888;
+            display: none;
+            border-bottom: 1px solid #1f2230;
+        }
+        .yard-expand.visible { display: block; }
+        .yard-expand div { padding: 2px 0; }
+
+        /* ── Gas & Parking Report ──────────────────────────── */
+        .gas-summary {
+            padding: 16px;
+            border-bottom: 1px solid #2a2d3a;
+        }
+        .gas-stat-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .gas-stat {
+            flex: 1;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .gas-stat .val {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .gas-stat .val.gas-color { color: #f59e0b; }
+        .gas-stat .val.park-color { color: #38bdf8; }
+        .gas-stat .label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .gas-stop-row {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1f2230;
+            cursor: pointer;
+        }
+        .gas-stop-row:hover { background: #22253a; }
+        .gas-cat-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .gas-cat-badge.gas { background: #f59e0b22; color: #f59e0b; }
+        .gas-cat-badge.parking { background: #38bdf822; color: #38bdf8; }
+
+        /* ── Tab content visibility ──────────────────────── */
+        .tab-content { display: none; }
+        .tab-content.visible { display: block; }
+        .sub-panel { display: none; }
+        .sub-panel.visible { display: block; }
+
+        /* ── Loading / Error ─────────────────────────────── */
+        .loading { padding: 40px; text-align: center; color: #888; font-size: 14px; }
+        .error { padding: 16px; color: #ef4444; font-size: 13px; }
+
+        /* ── Map refresh indicator ───────────────────────── */
+        .refresh-bar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(26,29,39,0.9);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #888;
+        }
+        .refresh-bar .countdown { color: #4ade80; font-weight: 600; }
+
+        /* ── Map Legend ──────────────────────────────────── */
+        .map-legend {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(26,29,39,0.92);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .map-legend .legend-title { font-weight: 600; color: #fff; margin-bottom: 4px; }
+        .legend-dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* ── Division filter pills ──────────────────────── */
+        .division-filters {
+            padding: 8px 16px;
+            border-bottom: 1px solid #2a2d3a;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .div-pill {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+            opacity: 1;
+        }
+        .div-pill.inactive { opacity: 0.35; }
+
+        /* ── Pulse animation for moving trucks ──────────── */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 4px currentColor; }
+            50% { box-shadow: 0 0 12px currentColor; }
+            100% { box-shadow: 0 0 4px currentColor; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span>MTScapes</span> Fleet Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:14px">
+        <div class="status" id="connectionStatus"><span class="dot"></span>Connecting...</div>
+        <span style="color:#888;font-size:13px">{{ user.display_name }}</span>
+        {% if is_admin %}<a href="/admin" style="color:#4ade80;font-size:12px;text-decoration:none;padding:4px 10px;border:1px solid #4ade80;border-radius:4px">Admin</a>{% endif %}
+        <a href="/logout" style="color:#888;font-size:12px;text-decoration:none;padding:4px 10px;border:1px solid #333;border-radius:4px">Logout</a>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" data-tab="live-map">Live Map</div>
+    <div class="tab" data-tab="yard">Yard Report</div>
+    <div class="tab" data-tab="gas">Gas & Parking</div>
+</div>
+
+<div class="main">
+    <div class="sidebar">
+        <!-- LIVE MAP SIDEBAR -->
+        <div id="tab-live-map" class="tab-content visible">
+            <div class="division-filters" id="divisionFilters">
+                <div class="div-pill" data-div="all" style="background:#444;color:#fff" onclick="filterDivision('all')">All</div>
+                <div class="div-pill" data-div="Install" style="background:#3b82f620;color:#3b82f6;border-color:#3b82f6" onclick="filterDivision('Install')">Install</div>
+                <div class="div-pill" data-div="Maintenance" style="background:#4ade8020;color:#4ade80;border-color:#4ade80" onclick="filterDivision('Maintenance')">Maint</div>
+                <div class="div-pill" data-div="Chemical" style="background:#a78bfa20;color:#a78bfa;border-color:#a78bfa" onclick="filterDivision('Chemical')">Chem</div>
+                <div class="div-pill" data-div="Shop" style="background:#f59e0b20;color:#f59e0b;border-color:#f59e0b" onclick="filterDivision('Shop')">Shop</div>
+                <div class="div-pill" data-div="Other" style="background:#88888820;color:#888;border-color:#888" onclick="filterDivision('Other')">Other</div>
+            </div>
+            <div class="sidebar-header">
+                <input type="text" id="vehicleSearch" placeholder="Search trucks..." />
+            </div>
+            <div class="vehicle-list" id="vehicleList">
+                <div class="loading">Loading fleet...</div>
+            </div>
+        </div>
+
+
+        <!-- YARD REPORT SIDEBAR -->
+        <div id="tab-yard" class="tab-content">
+            <div class="yard-summary">
+                <div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:8px">Morning Yard Time — All Dispatch Locations</div>
+                <div class="division-filters" id="yardDivFilters" style="margin-bottom:12px">
+                    <div class="div-pill" data-div="all" style="background:#444;color:#fff" onclick="filterYardDivision('all')">All</div>
+                    <div class="div-pill" data-div="Install" style="background:#3b82f620;color:#3b82f6;border-color:#3b82f6" onclick="filterYardDivision('Install')">Install</div>
+                    <div class="div-pill" data-div="Maintenance" style="background:#4ade8020;color:#4ade80;border-color:#4ade80" onclick="filterYardDivision('Maintenance')">Maint</div>
+                    <div class="div-pill" data-div="Chemical" style="background:#a78bfa20;color:#a78bfa;border-color:#a78bfa" onclick="filterYardDivision('Chemical')">Chem</div>
+                    <div class="div-pill" data-div="Other" style="background:#88888820;color:#888;border-color:#888" onclick="filterYardDivision('Other')">Other</div>
+                </div>
+                <div class="division-filters" id="yardLocFilters" style="margin-bottom:8px">
+                    <div class="div-pill" data-loc="all" style="background:#444;color:#fff" onclick="filterYardLocation('all')">All Yards</div>
+                </div>
+                <div class="division-filters" id="yardDayFilters" style="margin-bottom:12px">
+                    <div class="div-pill" data-day="weekly" style="background:#444;color:#fff" onclick="filterYardDay('weekly')">Weekly</div>
+                </div>
+                <div class="yard-stat-row">
+                    <div class="yard-stat">
+                        <div class="val" id="yardFleetAvg">—</div>
+                        <div class="label" id="yardAvgLabel">Fleet Avg (min)</div>
+                    </div>
+                    <div class="yard-stat">
+                        <div class="val" id="yardTruckCount">—</div>
+                        <div class="label">Trucks</div>
+                    </div>
+                    <div class="yard-stat">
+                        <div class="val" id="yardTotalHours">—</div>
+                        <div class="label" id="yardHrsLabel">Hrs Wasted/Day</div>
+                    </div>
+                </div>
+                <div id="yardCostBox" style="margin-top:12px;background:#2a1a1a;border:1px solid #ef444444;border-radius:8px;padding:14px;text-align:center">
+                    <div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Weekly Labor Cost Wasted</div>
+                    <div id="yardWeeklyCost" style="font-size:32px;font-weight:800;color:#ef4444">—</div>
+                    <div style="font-size:11px;color:#888;margin-top:4px"><span id="yardDailyCost">—</span>/day &times; <span id="yardDaysCount">5</span> days &bull; $112/hr per truck &bull; 15min grace</div>
+                </div>
+                <div style="font-size:11px;color:#666;margin-top:10px" id="yardDaysLabel">Analyzing last 5 weekdays...</div>
+            </div>
+            <div id="yardTruckList">
+                <div class="loading" style="padding:20px;text-align:center;color:#888">Loading yard report...</div>
+            </div>
+        </div>
+
+        <!-- GAS & PARKING SIDEBAR -->
+        <div id="tab-gas" class="tab-content">
+            <!-- Truck list view -->
+            <div id="gasTruckListView" class="sub-panel visible">
+                <div class="gas-summary">
+                    <div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:8px">Gas Station & Parking Lot Stops</div>
+                    <div class="division-filters" id="gasDivFilters" style="margin-bottom:12px">
+                        <div class="div-pill" data-div="all" style="background:#444;color:#fff" onclick="filterGasDivision('all')">All</div>
+                        <div class="div-pill" data-div="Install" style="background:#3b82f620;color:#3b82f6;border-color:#3b82f6" onclick="filterGasDivision('Install')">Install</div>
+                        <div class="div-pill" data-div="Maintenance" style="background:#4ade8020;color:#4ade80;border-color:#4ade80" onclick="filterGasDivision('Maintenance')">Maint</div>
+                        <div class="div-pill" data-div="Chemical" style="background:#a78bfa20;color:#a78bfa;border-color:#a78bfa" onclick="filterGasDivision('Chemical')">Chem</div>
+                        <div class="div-pill" data-div="Shop" style="background:#f59e0b20;color:#f59e0b;border-color:#f59e0b" onclick="filterGasDivision('Shop')">Shop</div>
+                        <div class="div-pill" data-div="Other" style="background:#88888820;color:#888;border-color:#888" onclick="filterGasDivision('Other')">Other</div>
+                    </div>
+                    <div class="gas-stat-row">
+                        <div class="gas-stat">
+                            <div class="val gas-color" id="gasCount">—</div>
+                            <div class="label">Gas Stops</div>
+                        </div>
+                        <div class="gas-stat">
+                            <div class="val gas-color" id="gasHours">—</div>
+                            <div class="label">Gas Hrs Total</div>
+                        </div>
+                        <div class="gas-stat">
+                            <div class="val park-color" id="parkCount">—</div>
+                            <div class="label">Parking Stops</div>
+                        </div>
+                        <div class="gas-stat">
+                            <div class="val park-color" id="parkHours">—</div>
+                            <div class="label">Parking Hrs Total</div>
+                        </div>
+                    </div>
+                    <div style="font-size:11px;color:#666;margin-top:10px" id="gasDaysLabel">Analyzing last 5 weekdays...</div>
+                </div>
+                <div class="sidebar-header">
+                    <input type="text" id="gasTruckSearch" placeholder="Search trucks..." />
+                </div>
+                <div id="gasTruckList">
+                    <div class="loading" style="padding:20px;text-align:center;color:#888">Loading gas & parking report...</div>
+                </div>
+            </div>
+            <!-- Stop detail view for selected truck -->
+            <div id="gasDetailView" class="detail-panel">
+                <div class="detail-back" onclick="showGasTruckList()">&larr; Back to trucks</div>
+                <div class="detail-header">
+                    <h2 id="gasDetailName"></h2>
+                    <p id="gasDetailSub"></p>
+                </div>
+                <div class="division-filters" id="gasDetailCatFilters" style="padding:8px 16px;border-bottom:1px solid #2a2d3a">
+                    <div class="div-pill" data-cat="all" style="background:#444;color:#fff" onclick="filterGasDetailCat('all')">All</div>
+                    <div class="div-pill" data-cat="gas" style="background:#f59e0b20;color:#f59e0b;border-color:#f59e0b" onclick="filterGasDetailCat('gas')">Gas</div>
+                    <div class="div-pill" data-cat="parking" style="background:#38bdf820;color:#38bdf8;border-color:#38bdf8" onclick="filterGasDetailCat('parking')">Parking</div>
+                </div>
+                <div id="gasStopList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+        <div class="refresh-bar" id="refreshBar">
+            Next refresh: <span class="countdown" id="countdown">30</span>s
+        </div>
+        <div class="map-legend">
+            <div class="legend-title">Divisions</div>
+            <div><span class="legend-dot" style="background:#3b82f6"></span>Install</div>
+            <div><span class="legend-dot" style="background:#4ade80"></span>Maintenance</div>
+            <div><span class="legend-dot" style="background:#a78bfa"></span>Chemical</div>
+            <div><span class="legend-dot" style="background:#f59e0b"></span>Shop</div>
+            <div><span class="legend-dot" style="background:#888"></span>Other</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let map, vehicleMarkers = {}, allVehicles = [], selectedVehicleId = null;
+let refreshInterval = null, countdownInterval = null, countdownValue = 30;
+let stopMarkers = [], tripPolyline = null;
+
+// ── Initialize Map ─────────────────────────────────────────────
+function initMap() {
+    map = L.map('map').setView([33.75, -84.39], 10); // Atlanta area
+    const streets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        subdomains: ['mt0','mt1','mt2','mt3'],
+        attribution: '&copy; Google',
+        maxZoom: 20
+    });
+    const satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        subdomains: ['mt0','mt1','mt2','mt3'],
+        attribution: '&copy; Google',
+        maxZoom: 20
+    });
+    streets.addTo(map);
+    L.control.layers({ 'Streets': streets, 'Satellite': satellite }, null, { position: 'topright' }).addTo(map);
+}
+
+// ── Tab Switching ──────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        // Only toggle top-level tab panels (direct children of sidebar)
+        document.querySelectorAll('.sidebar > .tab-content').forEach(c => c.classList.remove('visible'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('visible');
+
+        clearMapOverlays();
+
+        if (tab.dataset.tab === 'live-map') {
+            showAllVehicles();
+            startAutoRefresh();
+        } else {
+            stopAutoRefresh();
+        }
+
+        if (tab.dataset.tab === 'yard') {
+            loadYardReport();
+        }
+        if (tab.dataset.tab === 'gas') {
+            loadGasReport();
+        }
+    });
+});
+
+// ── Vehicle Loading ────────────────────────────────────────────
+async function loadLocations() {
+    try {
+        const resp = await fetch('/api/locations');
+        const data = await resp.json();
+
+        if (data.error) {
+            document.getElementById('connectionStatus').innerHTML = '<span style="color:#ef4444">&#9679;</span> Error: ' + data.error;
+            return;
+        }
+
+        // Handle various response shapes
+        let vehicles = [];
+        if (Array.isArray(data)) {
+            vehicles = data;
+        } else if (data.data && data.data.result && Array.isArray(data.data.result)) {
+            vehicles = data.data.result;
+        } else if (data.data && Array.isArray(data.data)) {
+            vehicles = data.data;
+        } else if (data.vehicles && Array.isArray(data.vehicles)) {
+            vehicles = data.vehicles;
+        } else if (data.results && Array.isArray(data.results)) {
+            vehicles = data.results;
+        } else {
+            // Try to find any array in the response
+            for (const key of Object.keys(data)) {
+                if (Array.isArray(data[key])) {
+                    vehicles = data[key];
+                    break;
+                }
+            }
+        }
+
+        allVehicles = vehicles;
+        updateVehicleList(vehicles);
+        updateMapMarkers(vehicles);
+
+        const count = vehicles.length;
+        const moving = vehicles.filter(v => getStatus(v) === 'moving').length;
+        const divCounts = {};
+        vehicles.forEach(v => { const d = getDivision(v); divCounts[d] = (divCounts[d]||0) + 1; });
+        const divSummary = Object.entries(divCounts).map(([d,c]) => {
+            const color = DIVISION_COLORS[d]?.bg || '#888';
+            return `<span style="color:${color}">${c} ${d}</span>`;
+        }).join(' &middot; ');
+        document.getElementById('connectionStatus').innerHTML =
+            `<span class="dot"></span>${count} trucks &middot; ${moving} moving &middot; ${divSummary}`;
+
+    } catch (err) {
+        document.getElementById('connectionStatus').innerHTML =
+            '<span style="color:#ef4444">&#9679;</span> Connection failed';
+        console.error('Location fetch error:', err);
+    }
+}
+
+// ── Field Helpers (Azuga-specific field names) ────────────────
+function getField(obj, ...names) {
+    for (const n of names) {
+        if (obj[n] !== undefined && obj[n] !== null) return obj[n];
+    }
+    return null;
+}
+
+// Azuga latestlocation fields: trackeeId, trackeeName, lat, lng, speed, address, firstName, lastName, dateAndTime
+function getVehicleId(v) { return v.trackeeId || v.vehicleId || ''; }
+function getVehicleName(v) { return v.trackeeName || v.vehicleName || 'Unknown'; }
+function getLat(v) { return parseFloat(v.lat || v.latitude || 0); }
+function getLng(v) { return parseFloat(v.lng || v.longitude || 0); }
+function getSpeed(v) { return parseFloat(v.speed || 0); }
+function getAddress(v) { return v.address || v.lastKnownAddress || ''; }
+function getDriver(v) {
+    const fn = v.firstName || '', ln = v.lastName || '';
+    const name = `${fn} ${ln}`.trim();
+    // Azuga sometimes puts phone numbers as firstName — skip those
+    return (name && !/^\d+/.test(name) && name !== '.') ? name : '';
+}
+function getTimestamp(v) {
+    // dateAndTime is epoch millis
+    if (v.dateAndTime) return new Date(v.dateAndTime).toLocaleString();
+    if (v.realLKL_time) return new Date(v.realLKL_time).toLocaleString();
+    return '';
+}
+function getOdometer(v) { return v.odometerReading || 0; }
+function getEventName(v) { return v.eventName || ''; }
+function getLastTripEnd(v) { return v.lastTripEndTime || 0; }
+
+// Status based on eventName + speed (NOT the unreliable idling field)
+function getStatus(v) {
+    const speed = getSpeed(v);
+    if (speed > 2) return 'moving';
+    // Parked = trip ended
+    return 'parked';
+}
+
+function getLastSeen(v) {
+    // dateAndTime = most recent GPS ping (most reliable)
+    const dt = v.dateAndTime || v.realLKL_time || v.lastKnownTime || 0;
+    if (!dt) return '';
+    const now = Date.now();
+    const diffMin = (now - dt) / 60000;
+    if (diffMin < 0 || diffMin > 525600) return ''; // negative or > 1 year = stale
+    if (diffMin < 2) return 'just now';
+    if (diffMin < 60) return `${Math.round(diffMin)}m ago`;
+    if (diffMin < 1440) return `${Math.floor(diffMin/60)}h ${Math.round(diffMin%60)}m ago`;
+    return `${Math.floor(diffMin/1440)}d ago`;
+}
+function getGroup(v) { return v.groupName || ''; }
+
+// ── Division mapping & colors ─────────────────────────────────
+const MAINTENANCE_GROUPS = new Set([
+    'Maintenance', "Pablo's Crews", "Elias' Crews", "Omar's Crews",
+    "Carlos' Crews", "Bianca's Crews", "Jeremy's Crews", "Flower Crews"
+]);
+
+function getDivision(v) {
+    const group = getGroup(v);
+    if (group === 'Install') return 'Install';
+    if (MAINTENANCE_GROUPS.has(group)) return 'Maintenance';
+    if (group === 'Chemical') return 'Chemical';
+    if (group === 'Shop') return 'Shop';
+    return 'Other';
+}
+
+const DIVISION_COLORS = {
+    'Install':     { bg: '#3b82f6', light: '#1e3a5f', border: '#3b82f6' },
+    'Maintenance': { bg: '#4ade80', light: '#1b2a1f', border: '#4ade80' },
+    'Chemical':    { bg: '#a78bfa', light: '#2d2545', border: '#a78bfa' },
+    'Shop':        { bg: '#f59e0b', light: '#2a2210', border: '#f59e0b' },
+    'Other':       { bg: '#888888', light: '#222222', border: '#888888' },
+};
+
+// ── Vehicle List Rendering ─────────────────────────────────────
+function updateVehicleList(vehicles) {
+    const lists = ['vehicleList'];
+    lists.forEach(listId => {
+        const el = document.getElementById(listId);
+        if (!vehicles.length) {
+            el.innerHTML = '<div class="loading">No vehicles found</div>';
+            return;
+        }
+        el.innerHTML = vehicles.map(v => {
+            const speed = getSpeed(v);
+            const status = getStatus(v);
+            const isMoving = status === 'moving';
+            const speedClass = isMoving ? 'moving' : 'off';
+            const lastSeen = getLastSeen(v);
+            let speedText = isMoving ? `${Math.round(speed)} mph` : (lastSeen ? `Parked · ${lastSeen}` : 'Parked');
+            const driver = getDriver(v);
+            const addr = getAddress(v);
+            const division = getDivision(v);
+            const divColor = DIVISION_COLORS[division];
+            const detail = driver ? `${driver}${addr ? ' — ' + addr.split(',')[0] : ''}` : addr || 'No data';
+            const vid = getVehicleId(v);
+            return `
+                <div class="vehicle-item" data-id="${vid}" onclick="selectVehicle('${vid}', '${listId}')" style="border-left:3px solid ${divColor.bg}">
+                    <div class="vehicle-icon" style="background:${divColor.bg}22;color:${divColor.bg};font-size:11px;font-weight:700">${division.slice(0,3).toUpperCase()}</div>
+                    <div class="vehicle-info">
+                        <div class="vehicle-name">${getVehicleName(v)}</div>
+                        <div class="vehicle-detail">${detail}</div>
+                    </div>
+                    <div class="vehicle-speed ${speedClass}">${speedText}</div>
+                </div>
+            `;
+        }).join('');
+    });
+}
+
+// ── Map Markers ────────────────────────────────────────────────
+function updateMapMarkers(vehicles) {
+    vehicles.forEach(v => {
+        const id = getVehicleId(v);
+        const lat = getLat(v);
+        const lng = getLng(v);
+        if (!lat && !lng) return;
+
+        const speed = getSpeed(v);
+        const division = getDivision(v);
+        const divColor = DIVISION_COLORS[division].bg;
+        const isMoving = getStatus(v) === 'moving';
+        const opacity = isMoving ? 1 : 0.6;
+        const size = isMoving ? 16 : 12;
+        const pulse = isMoving ? `animation:pulse 2s infinite;` : '';
+        const icon = L.divIcon({
+            className: '',
+            html: `<div style="
+                width:${size}px;height:${size}px;border-radius:50%;
+                background:${divColor};border:2px solid #fff;
+                box-shadow:0 0 8px ${divColor}80;opacity:${opacity};${pulse}
+            "></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size/2, size/2]
+        });
+
+        if (vehicleMarkers[id]) {
+            vehicleMarkers[id].setLatLng([lat, lng]).setIcon(icon);
+        } else {
+            vehicleMarkers[id] = L.marker([lat, lng], { icon })
+                .addTo(map)
+                .bindPopup(() => {
+                    const curr = allVehicles.find(x => getVehicleId(x) === id) || v;
+                    const div = getDivision(curr);
+                    const dc = DIVISION_COLORS[div].bg;
+                    return `<b>${getVehicleName(curr)}</b>
+                            <span style="background:${dc};color:#000;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;margin-left:6px">${div}</span><br>
+                            ${getDriver(curr) ? 'Driver: ' + getDriver(curr) + '<br>' : ''}
+                            Speed: ${Math.round(getSpeed(curr))} mph<br>
+                            ${getAddress(curr) ? getAddress(curr) + '<br>' : ''}
+                            <small>${getTimestamp(curr)}</small>`;
+                });
+        }
+    });
+}
+
+function showAllVehicles() {
+    const latlngs = allVehicles
+        .filter(v => getLat(v) && getLng(v))
+        .map(v => [getLat(v), getLng(v)]);
+    if (latlngs.length) {
+        map.fitBounds(latlngs, { padding: [40, 40] });
+    }
+}
+
+function clearMapOverlays() {
+    stopMarkers.forEach(m => map.removeLayer(m));
+    stopMarkers = [];
+    if (tripPolyline) { map.removeLayer(tripPolyline); tripPolyline = null; }
+    showAllVehicleMarkers();
+}
+
+// ── Vehicle Selection ──────────────────────────────────────────
+function selectVehicle(vehicleId, sourceList) {
+    selectedVehicleId = vehicleId;
+    const v = allVehicles.find(x => getVehicleId(x) === vehicleId);
+
+    // Highlight in list
+    document.querySelectorAll('.vehicle-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll(`[data-id="${vehicleId}"]`).forEach(el => el.classList.add('active'));
+
+    // Pan map to vehicle
+    if (v && getLat(v) && getLng(v)) {
+        map.setView([getLat(v), getLng(v)], 13);
+        if (vehicleMarkers[vehicleId]) vehicleMarkers[vehicleId].openPopup();
+    }
+
+    // Load today's breadcrumb on live map
+    if (sourceList === 'vehicleList') {
+        loadBreadcrumbDots(vehicleId);
+    }
+}
+
+function hideAllVehicleMarkers() {
+    Object.values(vehicleMarkers).forEach(m => map.removeLayer(m));
+}
+
+function showAllVehicleMarkers() {
+    Object.values(vehicleMarkers).forEach(m => {
+        if (!map.hasLayer(m)) map.addLayer(m);
+    });
+}
+
+async function loadBreadcrumbDots(vehicleId) {
+    clearMapOverlays();
+    hideAllVehicleMarkers();
+    const today = new Date().toISOString().split('T')[0];
+    try {
+        const resp = await fetch(`/api/breadcrumb/${vehicleId}?start=${today}&end=${today}`);
+        const raw = await resp.json();
+        const points = (raw.data && raw.data.result) ? raw.data.result
+            : Array.isArray(raw.data) ? raw.data
+            : Array.isArray(raw) ? raw : [];
+        if (!points.length) return;
+
+        const div = allVehicles.find(x => getVehicleId(x) === vehicleId);
+        const divColor = div ? (DIVISION_COLORS[getDivision(div)]?.bg || '#4ade80') : '#4ade80';
+
+        // Filter to valid points and sort by time
+        const validPts = points.filter(pt => {
+            if (!pt.latitude || !pt.longitude || pt.latitude === -1) return false;
+            if ((pt.eventName || '').toLowerCase().includes('ignition off')) return false;
+            return true;
+        }).sort((a, b) => {
+            const ta = a.locationTimeInDTZ || a.locationTime || '';
+            const tb = b.locationTimeInDTZ || b.locationTime || '';
+            return ta.localeCompare(tb);
+        });
+
+        const firstIgnitionIdx = validPts.findIndex(pt =>
+            (pt.eventName || '').toLowerCase().includes('ignition on')
+        );
+
+        validPts.forEach((pt, idx) => {
+            const lat = pt.latitude, lng = pt.longitude;
+            const spd = parseFloat(pt.sog || 0);
+            const ts = pt.locationTimeInDTZ || pt.locationTime || '';
+            const addr = pt.address || '';
+            const isLast = idx === validPts.length - 1;
+            const isFirst = idx === firstIgnitionIdx;
+
+            const dotColor = isLast ? '#ef4444' : isFirst ? '#4ade80' : divColor;
+            const radius = (isLast || isFirst) ? 10 : 7;
+
+            const marker = L.circleMarker([lat, lng], {
+                radius: radius,
+                color: '#fff',
+                fillColor: dotColor,
+                fillOpacity: 0.9,
+                weight: 2,
+            }).addTo(map).bindPopup(
+                `<b>${isLast ? '📍 Current — ' : isFirst ? '🟢 First On — ' : ''}${formatTime(ts)}</b><br>` +
+                `${spd > 0 ? Math.round(spd) + ' mph' : 'Stopped'}<br>` +
+                `${addr}`
+            );
+            stopMarkers.push(marker);
+        });
+
+        // Fit map to breadcrumb bounds
+        const latlngs = points
+            .filter(p => p.latitude && p.longitude && p.latitude !== -1)
+            .filter(p => !(p.eventName || '').toLowerCase().includes('ignition off'))
+            .map(p => [p.latitude, p.longitude]);
+        if (latlngs.length > 1) {
+            map.fitBounds(latlngs, { padding: [40, 40] });
+        }
+    } catch (err) {
+        console.error('Breadcrumb load error:', err);
+    }
+}
+
+function panToStop(lat, lng) {
+    map.setView([lat, lng], 17);
+}
+
+// ── Yard Report ───────────────────────────────────────────────
+let yardLoaded = false;
+let yardData = null;
+let yardDivFilter = 'all';
+let yardLocFilter = 'all';
+let yardDayFilter = 'weekly';
+
+const YARD_LOC_COLORS = {
+    'Cumming Shop': '#f59e0b',
+    'Tyrone Shop': '#38bdf8',
+    'Hoschton Shop': '#c084fc',
+};
+
+async function loadYardReport() {
+    if (yardLoaded) return;
+    yardLoaded = true;
+
+    document.getElementById('yardTruckList').innerHTML =
+        '<div style="padding:20px;text-align:center;color:#888">Pulling breadcrumb data for all trucks...<br><span style="font-size:11px;color:#666">This takes about 60 seconds the first time.</span></div>';
+
+    try {
+        const resp = await fetch('/api/yard-departure?days=5');
+        const data = await resp.json();
+        if (data.error) {
+            document.getElementById('yardTruckList').innerHTML =
+                `<div style="padding:20px;color:#ef4444">Error: ${data.error}</div>`;
+            yardLoaded = false;
+            return;
+        }
+
+        yardData = data;
+        document.getElementById('yardDaysLabel').textContent =
+            'Based on: ' + data.days_analyzed.join(', ');
+
+        // Build day filter pills
+        if (data.days_analyzed && data.days_analyzed.length) {
+            let dayPills = '<div class="div-pill" data-day="weekly" style="background:#444;color:#fff;font-weight:700" onclick="filterYardDay(\'weekly\')">Weekly</div>';
+            data.days_analyzed.forEach(d => {
+                dayPills += `<div class="div-pill" data-day="${d}" style="background:#33363f;color:#aaa;border-color:#555" onclick="filterYardDay('${d}')">${d}</div>`;
+            });
+            document.getElementById('yardDayFilters').innerHTML = dayPills;
+        }
+
+        // Build yard location filter pills
+        if (data.yards && data.yards.length) {
+            let pillsHtml = '<div class="div-pill" data-loc="all" style="background:#444;color:#fff" onclick="filterYardLocation(\'all\')">All Yards</div>';
+            data.yards.forEach(y => {
+                const c = YARD_LOC_COLORS[y.name] || '#888';
+                pillsHtml += `<div class="div-pill" data-loc="${y.name}" style="background:${c}20;color:${c};border-color:${c}" onclick="filterYardLocation('${y.name}')">${y.name} (${y.truck_count})</div>`;
+            });
+            document.getElementById('yardLocFilters').innerHTML = pillsHtml;
+        }
+
+        renderYardReport();
+    } catch (err) {
+        document.getElementById('yardTruckList').innerHTML =
+            `<div style="padding:20px;color:#ef4444">Failed to load: ${err.message}</div>`;
+        yardLoaded = false;
+    }
+}
+
+function filterYardDivision(div) {
+    yardDivFilter = div;
+    document.querySelectorAll('#yardDivFilters .div-pill').forEach(p => {
+        p.style.opacity = (div === 'all' || p.dataset.div === div || p.dataset.div === 'all') ? '1' : '0.35';
+        p.style.fontWeight = p.dataset.div === div ? '700' : '400';
+    });
+    if (yardData) renderYardReport();
+}
+
+function filterYardDay(day) {
+    yardDayFilter = day;
+    document.querySelectorAll('#yardDayFilters .div-pill').forEach(p => {
+        p.style.opacity = (p.dataset.day === day) ? '1' : '0.35';
+        p.style.fontWeight = p.dataset.day === day ? '700' : '400';
+    });
+    if (yardData) renderYardReport();
+}
+
+function filterYardLocation(loc) {
+    yardLocFilter = loc;
+    document.querySelectorAll('#yardLocFilters .div-pill').forEach(p => {
+        p.style.opacity = (loc === 'all' || p.dataset.loc === loc || p.dataset.loc === 'all') ? '1' : '0.35';
+        p.style.fontWeight = p.dataset.loc === loc ? '700' : '400';
+    });
+    if (yardData) renderYardReport();
+}
+
+function renderYardReport() {
+    let filtered = yardData.trucks;
+    if (yardDivFilter !== 'all') filtered = filtered.filter(t => t.division === yardDivFilter);
+    if (yardLocFilter !== 'all') filtered = filtered.filter(t => t.yard === yardLocFilter);
+
+    const isDaily = yardDayFilter !== 'weekly';
+
+    if (isDaily) {
+        // Filter to only trucks that have data for the selected day, use that day's dwell
+        filtered = filtered.map(t => {
+            const dayEntry = t.daily.find(d => d.day === yardDayFilter);
+            if (!dayEntry) return null;
+            return { ...t, avg_minutes: dayEntry.dwell_min, days_seen: 1, _dayEntry: dayEntry };
+        }).filter(Boolean);
+        filtered.sort((a, b) => b.avg_minutes - a.avg_minutes);
+    }
+
+    const avgs = filtered.map(t => t.avg_minutes);
+    const fleetAvg = avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : 0;
+    const totalHrs = avgs.length ? (avgs.reduce((a, b) => a + b, 0) / 60).toFixed(1) : '0';
+
+    document.getElementById('yardFleetAvg').textContent = fleetAvg;
+    document.getElementById('yardAvgLabel').textContent = isDaily ? 'Avg (min)' : 'Fleet Avg (min)';
+    document.getElementById('yardTruckCount').textContent = filtered.length;
+    document.getElementById('yardTotalHours').textContent = totalHrs;
+    document.getElementById('yardHrsLabel').textContent = isDaily ? 'Hrs Wasted' : 'Hrs Wasted/Day';
+
+    const COST_PER_HOUR = 112;
+    const GRACE_MIN = 15;
+    const wastedMin = avgs.map(a => Math.max(0, a - GRACE_MIN));
+    const totalMinPerDay = wastedMin.reduce((a, b) => a + b, 0);
+    const dailyCost = (totalMinPerDay / 60) * COST_PER_HOUR;
+    const numDays = isDaily ? 1 : yardData.days_analyzed.length;
+    const weeklyCost = dailyCost * numDays;
+
+    const costLabel = document.querySelector('#yardCostBox > div:first-child');
+    if (isDaily) {
+        costLabel.textContent = `Labor Cost Wasted — ${yardDayFilter}`;
+        document.getElementById('yardWeeklyCost').textContent = '$' + Math.round(dailyCost).toLocaleString();
+        document.getElementById('yardDailyCost').parentElement.style.display = 'none';
+    } else {
+        costLabel.textContent = 'Weekly Labor Cost Wasted';
+        document.getElementById('yardWeeklyCost').textContent = '$' + Math.round(weeklyCost).toLocaleString();
+        document.getElementById('yardDailyCost').parentElement.style.display = '';
+        document.getElementById('yardDailyCost').textContent = '$' + Math.round(dailyCost).toLocaleString();
+        document.getElementById('yardDaysCount').textContent = numDays;
+    }
+
+    const maxAvg = filtered.length ? filtered[0].avg_minutes : 1;
+    const divColors = {
+        'Install': '#3b82f6', 'Maintenance': '#4ade80',
+        'Chemical': '#a78bfa', 'Shop': '#f59e0b', 'Other': '#888',
+    };
+
+    let html = '';
+    filtered.forEach((t, i) => {
+        const pct = Math.min(100, (t.avg_minutes / maxAvg) * 100);
+        let colorClass = 'green';
+        let barColor = '#4ade80';
+        if (t.avg_minutes >= 90) { colorClass = 'red'; barColor = '#ef4444'; }
+        else if (t.avg_minutes >= 45) { colorClass = 'orange'; barColor = '#f59e0b'; }
+
+        const divColor = divColors[t.division] || '#888';
+        const divBadge = `<span style="background:${divColor}22;color:${divColor};padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;margin-left:6px">${t.division.slice(0,3).toUpperCase()}</span>`;
+
+        const locColor = YARD_LOC_COLORS[t.yard] || '#888';
+        const locBadge = `<span style="background:${locColor}22;color:${locColor};padding:1px 5px;border-radius:3px;font-size:10px;margin-left:4px">${t.yard}</span>`;
+
+        let timeDetail = '';
+        if (isDaily && t._dayEntry) {
+            const d = t._dayEntry;
+            timeDetail = `<div style="font-size:11px;color:#aaa;margin-top:2px">On ${d.first_on} → Left ${d.departed}</div>`;
+        }
+
+        html += `<div class="yard-truck-row" onclick="toggleYardExpand('ye${i}')">
+            <div class="yard-rank">${i + 1}</div>
+            <div class="yard-truck-name">${t.truck}${divBadge}${locBadge}${timeDetail}</div>
+            <div class="yard-bar-bg"><div class="yard-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+            <div class="yard-avg ${colorClass}">${Math.round(t.avg_minutes)}m</div>
+            <div class="yard-days">${isDaily ? '' : t.days_seen + 'd'}</div>
+        </div>
+        <div class="yard-expand" id="ye${i}">
+            ${t.daily.map(d => {
+                const dLocColor = YARD_LOC_COLORS[d.yard] || '#888';
+                return `<div>${d.day}: On ${d.first_on} → Left ${d.departed} <span style="color:#f59e0b">(${Math.round(d.dwell_min)}m)</span> <span style="color:${dLocColor};font-size:10px">${d.yard || ''}</span></div>`;
+            }).join('')}
+        </div>`;
+    });
+
+    document.getElementById('yardTruckList').innerHTML = html || '<div style="padding:20px;color:#888">No trucks match filters.</div>';
+}
+
+function toggleYardExpand(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('visible');
+}
+
+// ── Auto-Refresh ───────────────────────────────────────────────
+function startAutoRefresh() {
+    stopAutoRefresh();
+    countdownValue = 30;
+    document.getElementById('refreshBar').style.display = 'block';
+
+    countdownInterval = setInterval(() => {
+        countdownValue--;
+        document.getElementById('countdown').textContent = countdownValue;
+        if (countdownValue <= 0) {
+            countdownValue = 30;
+            loadLocations();
+        }
+    }, 1000);
+}
+
+function stopAutoRefresh() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    document.getElementById('refreshBar').style.display = 'none';
+}
+
+// ── Search Filtering ───────────────────────────────────────────
+['vehicleSearch'].forEach(inputId => {
+    const el = document.getElementById(inputId);
+    if (el) {
+        el.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const listId = 'vehicleList';
+            const items = document.getElementById(listId).querySelectorAll('.vehicle-item');
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+    }
+});
+
+// ── Utility ────────────────────────────────────────────────────
+function formatTime(ts) {
+    if (!ts) return '';
+    try {
+        // Azuga timestamps have +00:00 but are ALREADY in Eastern time.
+        // Strip the timezone offset so the browser doesn't double-convert.
+        let s = String(ts);
+        if (s.includes('+')) s = s.substring(0, s.lastIndexOf('+'));
+        else if (s.endsWith('Z')) s = s.slice(0, -1);
+        const d = new Date(s);
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch { return ts; }
+}
+
+// ── Division Filtering ─────────────────────────────────────────
+let activeDivision = 'all';
+
+function filterDivision(div) {
+    activeDivision = div;
+
+    // Update pill styles
+    document.querySelectorAll('#divisionFilters .div-pill').forEach(pill => {
+        if (pill.dataset.div === div || div === 'all' && pill.dataset.div === 'all') {
+            pill.classList.remove('inactive');
+        } else if (div === 'all') {
+            pill.classList.remove('inactive');
+        } else {
+            pill.classList.toggle('inactive', pill.dataset.div !== div && pill.dataset.div !== 'all');
+        }
+    });
+
+    // Filter sidebar list
+    const items = document.getElementById('vehicleList').querySelectorAll('.vehicle-item');
+    items.forEach(item => {
+        const vid = item.dataset.id;
+        const v = allVehicles.find(x => getVehicleId(x) === vid);
+        if (!v) return;
+        const vDiv = getDivision(v);
+        item.style.display = (div === 'all' || vDiv === div) ? '' : 'none';
+    });
+
+    // Filter map markers
+    Object.keys(vehicleMarkers).forEach(id => {
+        const v = allVehicles.find(x => getVehicleId(x) === id);
+        if (!v) return;
+        const vDiv = getDivision(v);
+        const show = div === 'all' || vDiv === div;
+        if (show) {
+            if (!map.hasLayer(vehicleMarkers[id])) vehicleMarkers[id].addTo(map);
+        } else {
+            if (map.hasLayer(vehicleMarkers[id])) map.removeLayer(vehicleMarkers[id]);
+        }
+    });
+}
+
+// ── Gas & Parking Report ───────────────────────────────────────
+let gasLoaded = false;
+let gasData = null;
+let gasDivFilter = 'all';
+let gasDetailCatFilter = 'all';
+let gasSelectedTruck = null;
+
+async function loadGasReport() {
+    if (gasLoaded) return;
+    gasLoaded = true;
+
+    document.getElementById('gasTruckList').innerHTML =
+        '<div style="padding:20px;text-align:center;color:#888">Pulling breadcrumb data for all trucks...<br><span style="font-size:11px;color:#666">This takes about 60 seconds the first time.</span></div>';
+
+    try {
+        const resp = await fetch('/api/gas-parking-stops?days=5');
+        const data = await resp.json();
+        if (data.error) {
+            document.getElementById('gasTruckList').innerHTML =
+                `<div style="padding:20px;color:#ef4444">Error: ${data.error}</div>`;
+            gasLoaded = false;
+            return;
+        }
+
+        gasData = data;
+        document.getElementById('gasDaysLabel').textContent =
+            'Based on: ' + data.days_analyzed.join(', ');
+
+        renderGasTruckList();
+    } catch (err) {
+        document.getElementById('gasTruckList').innerHTML =
+            `<div style="padding:20px;color:#ef4444">Failed to load: ${err.message}</div>`;
+        gasLoaded = false;
+    }
+}
+
+function filterGasDivision(div) {
+    gasDivFilter = div;
+    document.querySelectorAll('#gasDivFilters .div-pill').forEach(p => {
+        p.style.opacity = (div === 'all' || p.dataset.div === div || p.dataset.div === 'all') ? '1' : '0.35';
+        p.style.fontWeight = p.dataset.div === div ? '700' : '400';
+    });
+    if (gasData) renderGasTruckList();
+}
+
+function renderGasTruckList() {
+    let stops = gasData.stops;
+    if (gasDivFilter !== 'all') stops = stops.filter(s => s.division === gasDivFilter);
+
+    // Update summary stats
+    const gasStops = stops.filter(s => s.category === 'gas');
+    const parkStops = stops.filter(s => s.category === 'parking');
+    const gasMin = gasStops.reduce((a, s) => a + s.dwell_minutes, 0);
+    const parkMin = parkStops.reduce((a, s) => a + s.dwell_minutes, 0);
+    document.getElementById('gasCount').textContent = gasStops.length;
+    document.getElementById('gasHours').textContent = (gasMin / 60).toFixed(1);
+    document.getElementById('parkCount').textContent = parkStops.length;
+    document.getElementById('parkHours').textContent = (parkMin / 60).toFixed(1);
+
+    // Group by truck
+    const truckMap = {};
+    stops.forEach(s => {
+        if (!truckMap[s.truck]) {
+            truckMap[s.truck] = { division: s.division, stops: [], totalMin: 0, gasCount: 0, parkCount: 0 };
+        }
+        truckMap[s.truck].stops.push(s);
+        truckMap[s.truck].totalMin += s.dwell_minutes;
+        if (s.category === 'gas') truckMap[s.truck].gasCount++;
+        else truckMap[s.truck].parkCount++;
+    });
+
+    // Sort by total time spent descending
+    const sorted = Object.entries(truckMap).sort((a, b) => b[1].totalMin - a[1].totalMin);
+
+    const divColors = {
+        'Install': '#3b82f6', 'Maintenance': '#4ade80',
+        'Chemical': '#a78bfa', 'Shop': '#f59e0b', 'Other': '#888',
+    };
+
+    let html = '';
+    sorted.forEach(([name, info]) => {
+        const totalStr = info.totalMin >= 60
+            ? `${Math.floor(info.totalMin/60)}h ${Math.round(info.totalMin%60)}m`
+            : `${Math.round(info.totalMin)}m`;
+        const divColor = divColors[info.division] || '#888';
+        const divBadge = `<span style="background:${divColor}22;color:${divColor};padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600">${info.division.slice(0,3).toUpperCase()}</span>`;
+
+        const badges = [];
+        if (info.gasCount) badges.push(`<span style="color:#f59e0b">${info.gasCount} gas</span>`);
+        if (info.parkCount) badges.push(`<span style="color:#38bdf8">${info.parkCount} parking</span>`);
+
+        html += `<div class="vehicle-item" style="border-left:3px solid ${divColor}" onclick="openGasDetail('${name.replace(/'/g, "\\'")}')">
+            <div class="vehicle-icon" style="background:${divColor}22;color:${divColor};font-size:11px;font-weight:700">${divBadge}</div>
+            <div class="vehicle-info">
+                <div class="vehicle-name">${name}</div>
+                <div class="vehicle-detail">${badges.join(' &bull; ')} &bull; ${info.stops.length} stops</div>
+            </div>
+            <div class="vehicle-speed off">${totalStr}</div>
+        </div>`;
+    });
+
+    document.getElementById('gasTruckList').innerHTML = html || '<div style="padding:20px;color:#888">No gas station or parking lot stops found.</div>';
+}
+
+function openGasDetail(truckName) {
+    gasSelectedTruck = truckName;
+    gasDetailCatFilter = 'all';
+    document.getElementById('gasTruckListView').classList.remove('visible');
+    document.getElementById('gasDetailView').classList.add('visible');
+
+    const truckStops = gasData.stops.filter(s => s.truck === truckName);
+    const info = truckStops[0] || {};
+    document.getElementById('gasDetailName').textContent = truckName;
+
+    const gasCount = truckStops.filter(s => s.category === 'gas').length;
+    const parkCount = truckStops.filter(s => s.category === 'parking').length;
+    const totalMin = truckStops.reduce((a, s) => a + s.dwell_minutes, 0);
+    const totalStr = totalMin >= 60 ? `${Math.floor(totalMin/60)}h ${Math.round(totalMin%60)}m` : `${Math.round(totalMin)}m`;
+    document.getElementById('gasDetailSub').textContent = `${info.division || ''} · ${gasCount} gas · ${parkCount} parking · ${totalStr} total`;
+
+    // Reset cat filter pills
+    document.querySelectorAll('#gasDetailCatFilters .div-pill').forEach(p => {
+        p.style.opacity = '1';
+        p.style.fontWeight = p.dataset.cat === 'all' ? '700' : '400';
+    });
+
+    renderGasDetail();
+}
+
+function showGasTruckList() {
+    document.getElementById('gasDetailView').classList.remove('visible');
+    document.getElementById('gasTruckListView').classList.add('visible');
+    clearMapOverlays();
+}
+
+function filterGasDetailCat(cat) {
+    gasDetailCatFilter = cat;
+    document.querySelectorAll('#gasDetailCatFilters .div-pill').forEach(p => {
+        p.style.opacity = (cat === 'all' || p.dataset.cat === cat || p.dataset.cat === 'all') ? '1' : '0.35';
+        p.style.fontWeight = p.dataset.cat === cat ? '700' : '400';
+    });
+    renderGasDetail();
+}
+
+function renderGasDetail() {
+    let stops = gasData.stops.filter(s => s.truck === gasSelectedTruck);
+    if (gasDetailCatFilter !== 'all') stops = stops.filter(s => s.category === gasDetailCatFilter);
+    stops.sort((a, b) => b.dwell_minutes - a.dwell_minutes);
+
+    // Show all stops on map
+    clearMapOverlays();
+    const latlngs = [];
+    stops.forEach(s => {
+        if (s.lat && s.lng) {
+            const color = s.category === 'gas' ? '#f59e0b' : '#38bdf8';
+            const marker = L.circleMarker([s.lat, s.lng], {
+                radius: 8, color: color, fillColor: color, fillOpacity: 0.8, weight: 2
+            }).addTo(map).bindPopup(`
+                <b>${s.poi_name || s.category}</b><br>
+                ${s.address || ''}<br>
+                ${s.day} · ${formatTime(s.arrival)} - ${formatTime(s.departure)}<br>
+                <b>${s.dwell_minutes >= 60 ? Math.floor(s.dwell_minutes/60)+'h '+Math.round(s.dwell_minutes%60)+'m' : Math.round(s.dwell_minutes)+'m'}</b>
+            `);
+            stopMarkers.push(marker);
+            latlngs.push([s.lat, s.lng]);
+        }
+    });
+    if (latlngs.length) map.fitBounds(latlngs, { padding: [60, 60] });
+
+    let html = '';
+    stops.forEach(s => {
+        const dwellStr = s.dwell_minutes >= 60
+            ? `${Math.floor(s.dwell_minutes/60)}h ${Math.round(s.dwell_minutes%60)}m`
+            : `${Math.round(s.dwell_minutes)}m`;
+        const catBadge = `<span class="gas-cat-badge ${s.category}">${s.category === 'gas' ? 'Gas' : 'Parking'}</span>`;
+        const poiLabel = s.poi_name ? `<span style="color:#4ade80;font-weight:600">${s.poi_name}</span> — ` : '';
+        const distLabel = '';
+
+        html += `<div class="gas-stop-row" onclick="panToGasStop(${s.lat}, ${s.lng})">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:13px;color:#ccc">${catBadge}${distLabel}</div>
+                <div style="font-size:14px;font-weight:700;color:#f59e0b">${dwellStr}</div>
+            </div>
+            <div style="font-size:12px;color:#ccc;margin-top:3px">${poiLabel}${s.address || 'Unknown location'}</div>
+            <div style="font-size:11px;color:#888;margin-top:2px">${s.day} &bull; ${formatTime(s.arrival)} - ${formatTime(s.departure)}</div>
+        </div>`;
+    });
+
+    document.getElementById('gasStopList').innerHTML = html || '<div style="padding:20px;color:#888">No stops found for this filter.</div>';
+}
+
+function panToGasStop(lat, lng) {
+    if (lat && lng) map.setView([lat, lng], 17);
+}
+
+// Search filter for gas truck list
+document.getElementById('gasTruckSearch').addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase();
+    document.getElementById('gasTruckList').querySelectorAll('.vehicle-item').forEach(item => {
+        item.style.display = item.textContent.toLowerCase().includes(query) ? '' : 'none';
+    });
+});
+
+// ── Boot ───────────────────────────────────────────────────────
+initMap();
+loadLocations();
+startAutoRefresh();
+loadYardReport();
+loadGasReport();
+</script>
+
+</body>
+</html>

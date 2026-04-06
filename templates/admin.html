@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTScapes Fleet — Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; }
+
+        .header {
+            background: #1a1d27;
+            border-bottom: 1px solid #2a2d3a;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { font-size: 20px; font-weight: 600; color: #fff; }
+        .header h1 span { color: #4ade80; }
+        .header-right { display: flex; gap: 12px; align-items: center; }
+        .header-right a {
+            color: #4ade80;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 14px;
+            border: 1px solid #4ade80;
+            border-radius: 6px;
+        }
+        .header-right a:hover { background: #4ade8015; }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .section-header h2 { font-size: 18px; color: #fff; }
+
+        .btn {
+            padding: 8px 16px;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn:hover { background: #22c55e; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #333; color: #e0e0e0; }
+        .btn-secondary:hover { background: #444; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1d27;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .user-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2a2d3a;
+            background: #15171f;
+        }
+        .user-table td {
+            padding: 12px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid #1f2230;
+        }
+        .user-table tr:last-child td { border-bottom: none; }
+        .user-table tr:hover { background: #22253a; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-admin { background: #4ade8022; color: #4ade80; }
+        .badge-user { background: #3b82f622; color: #3b82f6; }
+
+        .actions { display: flex; gap: 6px; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal {
+            background: #1a1d27;
+            border: 1px solid #2a2d3a;
+            border-radius: 12px;
+            padding: 28px;
+            width: 480px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal h3 { font-size: 16px; color: #fff; margin-bottom: 20px; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            outline: none;
+        }
+        .form-group input:focus { border-color: #4ade80; }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+
+        /* Vehicle assignment */
+        .vehicle-modal { width: 600px; }
+        .vehicle-group-header {
+            font-size: 13px;
+            font-weight: 600;
+            margin: 12px 0 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .vehicle-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+        }
+        .vehicle-check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 4px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .vehicle-check:hover { background: #22253a; }
+        .select-btns { display: flex; gap: 6px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MT<span>Scapes</span> Fleet — Admin</h1>
+        <div class="header-right">
+            <a href="/">Back to Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section-header">
+            <h2>User Management</h2>
+            <button class="btn" onclick="openAddUser()">+ Add User</button>
+        </div>
+
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Display Name</th>
+                    <th>Role</th>
+                    <th>Vehicles</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody">
+                <tr><td colspan="5" style="text-align:center;color:#888">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    <div class="modal-overlay" id="userModal">
+        <div class="modal">
+            <h3 id="userModalTitle">Add User</h3>
+            <input type="hidden" id="editUserId" />
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="formUsername" />
+            </div>
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="formDisplayName" />
+            </div>
+            <div class="form-group">
+                <label>Password <span id="pwHint" style="color:#888;font-weight:400"></span></label>
+                <input type="password" id="formPassword" />
+            </div>
+            <div class="form-group">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="formIsAdmin" />
+                    <label for="formIsAdmin" style="margin:0">Admin (sees all trucks)</label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveUser()">Save</button>
+                <button class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicle Assignment Modal -->
+    <div class="modal-overlay" id="vehicleModal">
+        <div class="modal vehicle-modal">
+            <h3 id="vehicleModalTitle">Assign Vehicles</h3>
+            <div class="select-btns">
+                <button class="btn btn-sm btn-secondary" onclick="selectAllVehicles()">Select All</button>
+                <button class="btn btn-sm btn-secondary" onclick="deselectAllVehicles()">Deselect All</button>
+            </div>
+            <div id="vehicleCheckboxes">Loading vehicles...</div>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveVehicles()">Save Assignments</button>
+                <button class="btn btn-secondary" onclick="closeModal('vehicleModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+let allVehicles = [];
+let assigningUserId = null;
+
+async function apiFetch(url, options) {
+    const resp = await fetch(url, options);
+    if (resp.status === 401) { window.location.href = '/login'; return null; }
+    return resp;
+}
+
+async function loadUsers() {
+    const resp = await apiFetch('/admin/api/users');
+    if (!resp) return;
+    const users = await resp.json();
+
+    const tbody = document.getElementById('userTableBody');
+    if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">No users</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = users.map(u => `
+        <tr>
+            <td>${u.username}</td>
+            <td>${u.display_name || ''}</td>
+            <td><span class="badge ${u.is_admin ? 'badge-admin' : 'badge-user'}">${u.is_admin ? 'Admin' : 'User'}</span></td>
+            <td>${u.is_admin ? '<span style="color:#888">All trucks</span>' : '<span style="color:#888">' + (u.vehicle_count || 0) + ' trucks</span>'}</td>
+            <td class="actions">
+                <button class="btn btn-sm btn-secondary" onclick="openEditUser(${u.id})">Edit</button>
+                ${!u.is_admin || u.id !== 1 ? `<button class="btn btn-sm btn-secondary" onclick="openAssignVehicles(${u.id}, '${u.display_name || u.username}')">Vehicles</button>` : ''}
+                ${u.id !== 1 ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${u.username}')">Delete</button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddUser() {
+    document.getElementById('userModalTitle').textContent = 'Add User';
+    document.getElementById('editUserId').value = '';
+    document.getElementById('formUsername').value = '';
+    document.getElementById('formDisplayName').value = '';
+    document.getElementById('formPassword').value = '';
+    document.getElementById('formIsAdmin').checked = false;
+    document.getElementById('pwHint').textContent = '';
+    document.getElementById('userModal').classList.add('visible');
+}
+
+async function openEditUser(userId) {
+    const resp = await apiFetch('/admin/api/users');
+    if (!resp) return;
+    const users = await resp.json();
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('formUsername').value = u.username;
+    document.getElementById('formDisplayName').value = u.display_name || '';
+    document.getElementById('formPassword').value = '';
+    document.getElementById('formIsAdmin').checked = u.is_admin;
+    document.getElementById('pwHint').textContent = '(leave blank to keep current)';
+    document.getElementById('userModal').classList.add('visible');
+}
+
+async function saveUser() {
+    const userId = document.getElementById('editUserId').value;
+    const data = {
+        username: document.getElementById('formUsername').value.trim(),
+        display_name: document.getElementById('formDisplayName').value.trim(),
+        password: document.getElementById('formPassword').value,
+        is_admin: document.getElementById('formIsAdmin').checked,
+    };
+
+    if (!data.username) { alert('Username is required'); return; }
+    if (!userId && !data.password) { alert('Password is required for new users'); return; }
+
+    const url = userId ? `/admin/api/users/${userId}` : '/admin/api/users';
+    const method = userId ? 'PUT' : 'POST';
+
+    const resp = await apiFetch(url, {
+        method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    if (!resp) return;
+    const result = await resp.json();
+    if (result.error) { alert(result.error); return; }
+
+    closeModal('userModal');
+    loadUsers();
+}
+
+async function deleteUser(userId, username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    const resp = await apiFetch(`/admin/api/users/${userId}`, { method: 'DELETE' });
+    if (!resp) return;
+    loadUsers();
+}
+
+async function openAssignVehicles(userId, displayName) {
+    assigningUserId = userId;
+    document.getElementById('vehicleModalTitle').textContent = `Assign Vehicles — ${displayName}`;
+    document.getElementById('vehicleCheckboxes').innerHTML = 'Loading...';
+    document.getElementById('vehicleModal').classList.add('visible');
+
+    // Fetch vehicles and current assignments in parallel
+    const [vResp, aResp] = await Promise.all([
+        apiFetch('/api/all-vehicles'),
+        apiFetch(`/admin/api/users/${userId}/vehicles`)
+    ]);
+    if (!vResp || !aResp) return;
+
+    allVehicles = await vResp.json();
+    const assigned = new Set(await aResp.json());
+
+    // Group by division
+    const MAINTENANCE_GROUPS = new Set([
+        'Maintenance', "Pablo's Crews", "Elias' Crews", "Omar's Crews",
+        "Carlos' Crews", "Bianca's Crews", "Jeremy's Crews", "Flower Crews"
+    ]);
+    const groups = {};
+    allVehicles.forEach(v => {
+        const gn = v.groupName || 'Other';
+        let div = gn;
+        if (MAINTENANCE_GROUPS.has(gn)) div = 'Maintenance';
+        else if (gn === 'Install') div = 'Install';
+        else if (gn === 'Chemical') div = 'Chemical';
+        else if (gn === 'Shop') div = 'Shop';
+        else div = 'Other';
+        if (!groups[div]) groups[div] = [];
+        groups[div].push(v);
+    });
+
+    const divOrder = ['Install', 'Maintenance', 'Chemical', 'Shop', 'Other'];
+    const divColors = { Install: '#3b82f6', Maintenance: '#4ade80', Chemical: '#a78bfa', Shop: '#f59e0b', Other: '#888' };
+
+    let html = '';
+    divOrder.forEach(div => {
+        const trucks = groups[div] || [];
+        if (!trucks.length) return;
+        trucks.sort((a, b) => (a.trackeeName || '').localeCompare(b.trackeeName || '', undefined, { numeric: true }));
+        const color = divColors[div] || '#888';
+        html += `<div class="vehicle-group-header">
+            <span style="color:${color}">${div}</span>
+            <span style="color:#888;font-size:11px">(${trucks.length})</span>
+            <button class="btn btn-sm btn-secondary" onclick="selectGroup('${div}')">All</button>
+            <button class="btn btn-sm btn-secondary" onclick="deselectGroup('${div}')">None</button>
+        </div>`;
+        html += '<div class="vehicle-grid">';
+        trucks.forEach(v => {
+            const vid = v.trackeeId;
+            const checked = assigned.has(vid) ? 'checked' : '';
+            html += `<label class="vehicle-check">
+                <input type="checkbox" data-vid="${vid}" data-div="${div}" ${checked} />
+                ${v.trackeeName || vid}
+            </label>`;
+        });
+        html += '</div>';
+    });
+
+    document.getElementById('vehicleCheckboxes').innerHTML = html;
+}
+
+function selectAllVehicles() {
+    document.querySelectorAll('#vehicleCheckboxes input[type="checkbox"]').forEach(c => c.checked = true);
+}
+function deselectAllVehicles() {
+    document.querySelectorAll('#vehicleCheckboxes input[type="checkbox"]').forEach(c => c.checked = false);
+}
+function selectGroup(div) {
+    document.querySelectorAll(`#vehicleCheckboxes input[data-div="${div}"]`).forEach(c => c.checked = true);
+}
+function deselectGroup(div) {
+    document.querySelectorAll(`#vehicleCheckboxes input[data-div="${div}"]`).forEach(c => c.checked = false);
+}
+
+async function saveVehicles() {
+    const checked = document.querySelectorAll('#vehicleCheckboxes input[type="checkbox"]:checked');
+    const vids = Array.from(checked).map(c => c.dataset.vid);
+
+    const resp = await apiFetch(`/admin/api/users/${assigningUserId}/vehicles`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicle_ids: vids })
+    });
+    if (!resp) return;
+    const result = await resp.json();
+    if (result.error) { alert(result.error); return; }
+
+    closeModal('vehicleModal');
+    loadUsers();
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('visible');
+}
+
+// Init
+loadUsers();
+</script>
+</body>
+</html>
