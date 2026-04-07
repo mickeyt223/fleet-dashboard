@@ -7,6 +7,7 @@ import time as _time
 import requests as http_requests
 from dateutil import parser as dtparser
 from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask_compress import Compress
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import azuga_api
 import models
@@ -27,6 +28,7 @@ def _set_cached_report(key, data):
 
 app = Flask(__name__)
 app.secret_key = "mtscapes-fleet-dashboard-2026"
+Compress(app)  # Gzip all responses — ~70-80% smaller JSON payloads
 
 models.init_db()
 
@@ -245,16 +247,22 @@ def debug_locations():
                         "traceback": tb.split("\n")[-4:]}), 500
 
 
+_LOCATION_FIELDS = {"trackeeId", "trackeeName", "lat", "lng", "speed", "address",
+                     "firstName", "lastName", "dateAndTime", "realLKL_time",
+                     "lastKnownTime", "odometerReading", "eventName",
+                     "lastTripEndTime", "groupName"}
+
 @app.route("/api/locations")
 @login_required
 def api_locations():
-    """Return latest GPS positions for all vehicles."""
+    """Return latest GPS positions for all vehicles (stripped to essential fields)."""
     try:
         data = azuga_api.get_latest_locations()
-        # Handle both dict and list responses from Azuga
         vlist = _extract_vehicle_list(data)
         filtered = _filter_vehicles_for_user(vlist)
-        return jsonify({"data": {"result": filtered}})
+        # Strip to only fields the frontend needs
+        slim = [{k: v[k] for k in _LOCATION_FIELDS if k in v} for v in filtered]
+        return jsonify({"data": {"result": slim}})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -276,17 +284,23 @@ def api_trips(vehicle_id):
         return jsonify({"error": str(e)}), 500
 
 
+_BREADCRUMB_FIELDS = {"latitude", "longitude", "eventName", "locationTimeInDTZ",
+                       "locationTime", "sog", "address"}
+
 @app.route("/api/breadcrumb/<vehicle_id>")
 @login_required
 def api_breadcrumb(vehicle_id):
-    """Return breadcrumb trail for a vehicle."""
+    """Return breadcrumb trail for a vehicle (stripped to essential fields)."""
     if not _user_can_access_vehicle(vehicle_id):
         return jsonify({"error": "Access denied"}), 403
     start = request.args.get("start", str(date.today()))
     end = request.args.get("end", str(date.today()))
     try:
         data = azuga_api.get_breadcrumb(vehicle_id, start, end)
-        return jsonify(data)
+        # Strip to only fields the frontend needs — much smaller payload
+        points = _extract_vehicle_list(data)
+        slim = [{k: pt[k] for k in _BREADCRUMB_FIELDS if k in pt} for pt in points]
+        return jsonify({"data": slim})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

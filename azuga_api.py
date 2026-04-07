@@ -141,7 +141,7 @@ def get_latest_locations():
             vcount = "?"
         print(f"[Azuga] Got {vcount} vehicles")
         return result
-    return _cached("latest_locations", 30, _fetch)
+    return _cached("latest_locations", 60, _fetch)  # 60s cache
 
 
 def get_vehicles():
@@ -176,7 +176,7 @@ def get_breadcrumb(vehicle_id, start_date, end_date):
         return _retry_on_401(
             lambda: requests.post(url, headers=_headers(), json=payload, timeout=60)
         )
-    return _cached(cache_key, 120, _fetch)
+    return _cached(cache_key, 300, _fetch)  # 5 min cache per vehicle+date
 
 
 def get_trips(vehicle_id, start_date, end_date):

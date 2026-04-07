@@ -1001,31 +1001,44 @@ function showAllVehicleMarkers() {
     });
 }
 
+// Browser-side breadcrumb cache (avoids re-fetching same truck)
+const _bcCache = {};
+
 async function loadBreadcrumbDots(vehicleId) {
     // Clear previous overlays but keep vehicle markers visible until data loads
     clearMapOverlays();
 
     const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `${vehicleId}:${today}`;
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-        const resp = await fetch(`/api/breadcrumb/${vehicleId}?start=${today}&end=${today}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
+        let points;
+        // Check browser cache first (cached for 5 min)
+        if (_bcCache[cacheKey] && (Date.now() - _bcCache[cacheKey].ts) < 300000) {
+            points = _bcCache[cacheKey].data;
+        } else {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            const resp = await fetch(`/api/breadcrumb/${vehicleId}?start=${today}&end=${today}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
 
-        if (!resp.ok) {
-            console.error('Breadcrumb API error:', resp.status);
-            return;  // Keep vehicle markers visible
+            if (!resp.ok) {
+                console.error('Breadcrumb API error:', resp.status);
+                return;
+            }
+
+            const raw = await resp.json();
+            if (raw.error) {
+                console.error('Breadcrumb error:', raw.error);
+                return;
+            }
+
+            points = (raw.data && raw.data.result) ? raw.data.result
+                : Array.isArray(raw.data) ? raw.data
+                : Array.isArray(raw) ? raw : [];
+
+            // Cache in browser
+            _bcCache[cacheKey] = { ts: Date.now(), data: points };
         }
-
-        const raw = await resp.json();
-        if (raw.error) {
-            console.error('Breadcrumb error:', raw.error);
-            return;
-        }
-
-        const points = (raw.data && raw.data.result) ? raw.data.result
-            : Array.isArray(raw.data) ? raw.data
-            : Array.isArray(raw) ? raw : [];
         if (!points.length) return;  // No data — keep markers visible
 
         const div = allVehicles.find(x => getVehicleId(x) === vehicleId);
@@ -1310,14 +1323,15 @@ function mobileShowMap() {
 
 function startAutoRefresh() {
     stopAutoRefresh();
-    countdownValue = 30;
+    const refreshSec = window.innerWidth <= 768 ? 60 : 30;  // Slower on mobile
+    countdownValue = refreshSec;
     document.getElementById('refreshBar').style.display = 'block';
 
     countdownInterval = setInterval(() => {
         countdownValue--;
         document.getElementById('countdown').textContent = countdownValue;
         if (countdownValue <= 0) {
-            countdownValue = 30;
+            countdownValue = refreshSec;
             loadLocations();
         }
     }, 1000);
