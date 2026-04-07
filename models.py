@@ -3,7 +3,6 @@
 import os
 import sqlite3
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "fleet_users.db")
 
@@ -22,10 +21,10 @@ def init_db():
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            display_name TEXT,
+            pin TEXT UNIQUE NOT NULL,
+            display_name TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
+            allowed_tabs TEXT DEFAULT 'all',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS user_vehicles (
@@ -36,13 +35,41 @@ def init_db():
         );
     """)
 
-    # Seed default admin if not exists
-    conn.execute(
-        "INSERT OR IGNORE INTO users (username, password_hash, display_name, is_admin) VALUES (?, ?, ?, ?)",
-        ("admin", generate_password_hash("admin"), "Administrator", 1),
-    )
-    if conn.total_changes > 0:
-        print("Default admin user created (username: admin, password: admin)")
+    # Migrate: if old schema has 'username' column, recreate table
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "username" in cols and "pin" not in cols:
+        print("Migrating users table from username/password to PIN...")
+        conn.executescript("""
+            DROP TABLE IF EXISTS users;
+            DROP TABLE IF EXISTS user_vehicles;
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pin TEXT UNIQUE NOT NULL,
+                display_name TEXT NOT NULL,
+                is_admin INTEGER DEFAULT 0,
+                allowed_tabs TEXT DEFAULT 'all',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE user_vehicles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                vehicle_id TEXT NOT NULL,
+                UNIQUE(user_id, vehicle_id)
+            );
+        """)
+
+    # Add allowed_tabs column if missing (for existing PIN-based DBs)
+    if "allowed_tabs" not in cols and "pin" in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN allowed_tabs TEXT DEFAULT 'all'")
+
+    # Seed default admin PIN (0000) if no users exist
+    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if count == 0:
+        conn.execute(
+            "INSERT INTO users (pin, display_name, is_admin, allowed_tabs) VALUES (?, ?, ?, ?)",
+            ("0000", "Administrator", 1, "all"),
+        )
+        print("Default admin created (PIN: 0000)")
 
     conn.commit()
     conn.close()
@@ -51,15 +78,18 @@ def init_db():
 class User(UserMixin):
     """Flask-Login compatible user object."""
 
-    def __init__(self, id, username, password_hash, display_name, is_admin):
+    def __init__(self, id, pin, display_name, is_admin, allowed_tabs):
         self.id = id
-        self.username = username
-        self.password_hash = password_hash
-        self.display_name = display_name or username
+        self.pin = pin
+        self.display_name = display_name or "User"
         self.is_admin = bool(is_admin)
+        self.allowed_tabs = allowed_tabs or "all"
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    def get_tab_list(self):
+        """Return list of allowed tab keys, or None for all."""
+        if self.is_admin or self.allowed_tabs == "all":
+            return None  # None = all tabs
+        return [t.strip() for t in self.allowed_tabs.split(",") if t.strip()]
 
     @staticmethod
     def get_by_id(user_id):
@@ -67,18 +97,18 @@ class User(UserMixin):
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         conn.close()
         if row:
-            return User(row["id"], row["username"], row["password_hash"],
-                        row["display_name"], row["is_admin"])
+            return User(row["id"], row["pin"], row["display_name"],
+                        row["is_admin"], row["allowed_tabs"])
         return None
 
     @staticmethod
-    def get_by_username(username):
+    def get_by_pin(pin):
         conn = get_db()
-        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE pin = ?", (pin,)).fetchone()
         conn.close()
         if row:
-            return User(row["id"], row["username"], row["password_hash"],
-                        row["display_name"], row["is_admin"])
+            return User(row["id"], row["pin"], row["display_name"],
+                        row["is_admin"], row["allowed_tabs"])
         return None
 
 
@@ -99,19 +129,19 @@ def get_all_users():
     """Return list of all users as dicts."""
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, username, display_name, is_admin, created_at FROM users ORDER BY username"
+        "SELECT id, pin, display_name, is_admin, allowed_tabs, created_at FROM users ORDER BY display_name"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def create_user(username, password, display_name, is_admin=False):
+def create_user(pin, display_name, is_admin=False, allowed_tabs="all"):
     """Create a new user. Returns user id."""
     conn = get_db()
     try:
         cur = conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, is_admin) VALUES (?, ?, ?, ?)",
-            (username, generate_password_hash(password), display_name, int(is_admin)),
+            "INSERT INTO users (pin, display_name, is_admin, allowed_tabs) VALUES (?, ?, ?, ?)",
+            (pin, display_name, int(is_admin), allowed_tabs),
         )
         conn.commit()
         user_id = cur.lastrowid
@@ -120,19 +150,18 @@ def create_user(username, password, display_name, is_admin=False):
     return user_id
 
 
-def update_user(user_id, username=None, password=None, display_name=None, is_admin=None):
+def update_user(user_id, pin=None, display_name=None, is_admin=None, allowed_tabs=None):
     """Update user fields. Only non-None values are changed."""
     conn = get_db()
     try:
-        if username is not None:
-            conn.execute("UPDATE users SET username = ? WHERE id = ?", (username, user_id))
+        if pin is not None:
+            conn.execute("UPDATE users SET pin = ? WHERE id = ?", (pin, user_id))
         if display_name is not None:
             conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (display_name, user_id))
         if is_admin is not None:
             conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(is_admin), user_id))
-        if password is not None:
-            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
-                         (generate_password_hash(password), user_id))
+        if allowed_tabs is not None:
+            conn.execute("UPDATE users SET allowed_tabs = ? WHERE id = ?", (allowed_tabs, user_id))
         conn.commit()
     finally:
         conn.close()

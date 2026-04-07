@@ -96,13 +96,12 @@ def login():
         return redirect("/")
     error = None
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        user = models.User.get_by_username(username)
-        if user and user.check_password(password):
+        pin = request.form.get("pin", "").strip()
+        user = models.User.get_by_pin(pin)
+        if user:
             login_user(user, remember=True)
             return redirect("/")
-        error = "Invalid username or password"
+        error = "Invalid PIN"
     return render_template("login.html", error=error)
 
 
@@ -120,7 +119,8 @@ def logout():
 def index():
     return render_template("dashboard.html",
                            user=current_user,
-                           is_admin=current_user.is_admin)
+                           is_admin=current_user.is_admin,
+                           allowed_tabs=current_user.get_tab_list())
 
 
 @app.route("/admin")
@@ -149,8 +149,8 @@ def admin_create_user():
     data = request.get_json()
     try:
         uid = models.create_user(
-            data["username"], data["password"],
-            data.get("display_name", ""), data.get("is_admin", False)
+            data["pin"], data.get("display_name", ""),
+            data.get("is_admin", False), data.get("allowed_tabs", "all")
         )
         return jsonify({"id": uid})
     except Exception as e:
@@ -164,10 +164,10 @@ def admin_update_user(user_id):
     try:
         models.update_user(
             user_id,
-            username=data.get("username"),
+            pin=data.get("pin") or None,
             display_name=data.get("display_name"),
             is_admin=data.get("is_admin"),
-            password=data.get("password") or None,
+            allowed_tabs=data.get("allowed_tabs"),
         )
         return jsonify({"ok": True})
     except Exception as e:

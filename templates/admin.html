@@ -91,8 +91,9 @@
         }
         .badge-admin { background: #4ade8022; color: #4ade80; }
         .badge-user { background: #3b82f622; color: #3b82f6; }
+        .badge-tab { background: #a78bfa22; color: #a78bfa; margin: 1px 2px; }
 
-        .actions { display: flex; gap: 6px; }
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
         /* Modal */
         .modal-overlay {
@@ -123,8 +124,7 @@
             margin-bottom: 5px;
             font-weight: 600;
         }
-        .form-group input[type="text"],
-        .form-group input[type="password"] {
+        .form-group input[type="text"] {
             width: 100%;
             padding: 8px 12px;
             background: #0f1117;
@@ -140,7 +140,9 @@
             align-items: center;
             gap: 8px;
             font-size: 13px;
+            padding: 4px 0;
         }
+        .tab-checks { margin-top: 6px; }
         .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 
         /* Vehicle assignment */
@@ -169,6 +171,14 @@
         }
         .vehicle-check:hover { background: #22253a; }
         .select-btns { display: flex; gap: 6px; margin-bottom: 12px; }
+
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            .user-table th, .user-table td { padding: 8px 10px; font-size: 12px; }
+            .modal { width: 95vw; padding: 20px; }
+            .vehicle-modal { width: 95vw; }
+            .vehicle-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -182,22 +192,23 @@
 
     <div class="container">
         <div class="section-header">
-            <h2>User Management</h2>
-            <button class="btn" onclick="openAddUser()">+ Add User</button>
+            <h2>PIN Management</h2>
+            <button class="btn" onclick="openAddUser()">+ Add PIN</button>
         </div>
 
         <table class="user-table">
             <thead>
                 <tr>
-                    <th>Username</th>
-                    <th>Display Name</th>
+                    <th>PIN</th>
+                    <th>Name</th>
                     <th>Role</th>
+                    <th>Tabs</th>
                     <th>Vehicles</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="userTableBody">
-                <tr><td colspan="5" style="text-align:center;color:#888">Loading...</td></tr>
+                <tr><td colspan="6" style="text-align:center;color:#888">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -205,24 +216,37 @@
     <!-- Add/Edit User Modal -->
     <div class="modal-overlay" id="userModal">
         <div class="modal">
-            <h3 id="userModalTitle">Add User</h3>
+            <h3 id="userModalTitle">Add PIN</h3>
             <input type="hidden" id="editUserId" />
             <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="formUsername" />
+                <label>PIN (4-6 digits)</label>
+                <input type="text" id="formPin" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="e.g. 1234" />
             </div>
             <div class="form-group">
                 <label>Display Name</label>
-                <input type="text" id="formDisplayName" />
-            </div>
-            <div class="form-group">
-                <label>Password <span id="pwHint" style="color:#888;font-weight:400"></span></label>
-                <input type="password" id="formPassword" />
+                <input type="text" id="formDisplayName" placeholder="e.g. John Smith" />
             </div>
             <div class="form-group">
                 <div class="checkbox-row">
-                    <input type="checkbox" id="formIsAdmin" />
-                    <label for="formIsAdmin" style="margin:0">Admin (sees all trucks)</label>
+                    <input type="checkbox" id="formIsAdmin" onchange="toggleAdminTabs()" />
+                    <label for="formIsAdmin" style="margin:0">Admin (sees all trucks & tabs)</label>
+                </div>
+            </div>
+            <div class="form-group" id="tabGroup">
+                <label>Visible Tabs</label>
+                <div class="tab-checks">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="tabLiveMap" value="live-map" checked />
+                        <label for="tabLiveMap" style="margin:0">Live Map</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="tabYard" value="yard" checked />
+                        <label for="tabYard" style="margin:0">Yard Report</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="tabGas" value="gas" checked />
+                        <label for="tabGas" style="margin:0">Gas & Parking</label>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">
@@ -252,10 +276,17 @@
 let allVehicles = [];
 let assigningUserId = null;
 
+const TAB_LABELS = { 'live-map': 'Live Map', 'yard': 'Yard Report', 'gas': 'Gas & Parking' };
+
 async function apiFetch(url, options) {
     const resp = await fetch(url, options);
     if (resp.status === 401) { window.location.href = '/login'; return null; }
     return resp;
+}
+
+function toggleAdminTabs() {
+    document.getElementById('tabGroup').style.display =
+        document.getElementById('formIsAdmin').checked ? 'none' : '';
 }
 
 async function loadUsers() {
@@ -265,33 +296,40 @@ async function loadUsers() {
 
     const tbody = document.getElementById('userTableBody');
     if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">No users</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888">No users</td></tr>';
         return;
     }
 
-    tbody.innerHTML = users.map(u => `
+    tbody.innerHTML = users.map(u => {
+        const tabs = u.is_admin || u.allowed_tabs === 'all'
+            ? '<span style="color:#888">All</span>'
+            : (u.allowed_tabs || '').split(',').map(t => `<span class="badge badge-tab">${TAB_LABELS[t.trim()] || t.trim()}</span>`).join('');
+        return `
         <tr>
-            <td>${u.username}</td>
+            <td style="font-family:monospace;font-size:15px;letter-spacing:2px">${u.pin}</td>
             <td>${u.display_name || ''}</td>
             <td><span class="badge ${u.is_admin ? 'badge-admin' : 'badge-user'}">${u.is_admin ? 'Admin' : 'User'}</span></td>
-            <td>${u.is_admin ? '<span style="color:#888">All trucks</span>' : '<span style="color:#888">' + (u.vehicle_count || 0) + ' trucks</span>'}</td>
+            <td>${tabs}</td>
+            <td>${u.is_admin ? '<span style="color:#888">All</span>' : '<span style="color:#888">' + (u.vehicle_count || 0) + ' trucks</span>'}</td>
             <td class="actions">
                 <button class="btn btn-sm btn-secondary" onclick="openEditUser(${u.id})">Edit</button>
-                ${!u.is_admin || u.id !== 1 ? `<button class="btn btn-sm btn-secondary" onclick="openAssignVehicles(${u.id}, '${u.display_name || u.username}')">Vehicles</button>` : ''}
-                ${u.id !== 1 ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${u.username}')">Delete</button>` : ''}
+                ${!u.is_admin ? `<button class="btn btn-sm btn-secondary" onclick="openAssignVehicles(${u.id}, '${(u.display_name || '').replace(/'/g, "\\'")}')">Vehicles</button>` : ''}
+                ${u.id !== 1 ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${(u.display_name || u.pin).replace(/'/g, "\\'")}')">Delete</button>` : ''}
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 function openAddUser() {
-    document.getElementById('userModalTitle').textContent = 'Add User';
+    document.getElementById('userModalTitle').textContent = 'Add PIN';
     document.getElementById('editUserId').value = '';
-    document.getElementById('formUsername').value = '';
+    document.getElementById('formPin').value = '';
     document.getElementById('formDisplayName').value = '';
-    document.getElementById('formPassword').value = '';
     document.getElementById('formIsAdmin').checked = false;
-    document.getElementById('pwHint').textContent = '';
+    document.getElementById('tabLiveMap').checked = true;
+    document.getElementById('tabYard').checked = true;
+    document.getElementById('tabGas').checked = true;
+    document.getElementById('tabGroup').style.display = '';
     document.getElementById('userModal').classList.add('visible');
 }
 
@@ -302,27 +340,52 @@ async function openEditUser(userId) {
     const u = users.find(x => x.id === userId);
     if (!u) return;
 
-    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('userModalTitle').textContent = 'Edit PIN';
     document.getElementById('editUserId').value = userId;
-    document.getElementById('formUsername').value = u.username;
+    document.getElementById('formPin').value = u.pin;
     document.getElementById('formDisplayName').value = u.display_name || '';
-    document.getElementById('formPassword').value = '';
     document.getElementById('formIsAdmin').checked = u.is_admin;
-    document.getElementById('pwHint').textContent = '(leave blank to keep current)';
+
+    // Set tab checkboxes
+    const tabs = u.is_admin || u.allowed_tabs === 'all'
+        ? ['live-map', 'yard', 'gas']
+        : (u.allowed_tabs || '').split(',').map(t => t.trim());
+    document.getElementById('tabLiveMap').checked = tabs.includes('live-map');
+    document.getElementById('tabYard').checked = tabs.includes('yard');
+    document.getElementById('tabGas').checked = tabs.includes('gas');
+    document.getElementById('tabGroup').style.display = u.is_admin ? 'none' : '';
+
     document.getElementById('userModal').classList.add('visible');
 }
 
 async function saveUser() {
     const userId = document.getElementById('editUserId').value;
+    const pin = document.getElementById('formPin').value.trim();
+    const isAdmin = document.getElementById('formIsAdmin').checked;
+
+    if (!pin || pin.length < 4 || !/^\d+$/.test(pin)) {
+        alert('PIN must be 4-6 digits'); return;
+    }
+
+    // Collect selected tabs
+    const tabIds = ['tabLiveMap', 'tabYard', 'tabGas'];
+    const selectedTabs = tabIds
+        .filter(id => document.getElementById(id).checked)
+        .map(id => document.getElementById(id).value);
+    const allowedTabs = isAdmin ? 'all' : (selectedTabs.length === 3 ? 'all' : selectedTabs.join(','));
+
+    if (!isAdmin && selectedTabs.length === 0) {
+        alert('Select at least one tab'); return;
+    }
+
     const data = {
-        username: document.getElementById('formUsername').value.trim(),
+        pin: pin,
         display_name: document.getElementById('formDisplayName').value.trim(),
-        password: document.getElementById('formPassword').value,
-        is_admin: document.getElementById('formIsAdmin').checked,
+        is_admin: isAdmin,
+        allowed_tabs: allowedTabs,
     };
 
-    if (!data.username) { alert('Username is required'); return; }
-    if (!userId && !data.password) { alert('Password is required for new users'); return; }
+    if (!data.display_name) { alert('Display name is required'); return; }
 
     const url = userId ? `/admin/api/users/${userId}` : '/admin/api/users';
     const method = userId ? 'PUT' : 'POST';
@@ -339,8 +402,8 @@ async function saveUser() {
     loadUsers();
 }
 
-async function deleteUser(userId, username) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+async function deleteUser(userId, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     const resp = await apiFetch(`/admin/api/users/${userId}`, { method: 'DELETE' });
     if (!resp) return;
     loadUsers();
@@ -352,7 +415,6 @@ async function openAssignVehicles(userId, displayName) {
     document.getElementById('vehicleCheckboxes').innerHTML = 'Loading...';
     document.getElementById('vehicleModal').classList.add('visible');
 
-    // Fetch vehicles and current assignments in parallel
     const [vResp, aResp] = await Promise.all([
         apiFetch('/api/all-vehicles'),
         apiFetch(`/admin/api/users/${userId}/vehicles`)
@@ -362,7 +424,6 @@ async function openAssignVehicles(userId, displayName) {
     allVehicles = await vResp.json();
     const assigned = new Set(await aResp.json());
 
-    // Group by division
     const MAINTENANCE_GROUPS = new Set([
         'Maintenance', "Pablo's Crews", "Elias' Crews", "Omar's Crews",
         "Carlos' Crews", "Bianca's Crews", "Jeremy's Crews", "Flower Crews"

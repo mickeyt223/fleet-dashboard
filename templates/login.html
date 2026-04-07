@@ -19,8 +19,9 @@
             background: #1a1d27;
             border: 1px solid #2a2d3a;
             border-radius: 12px;
-            padding: 40px;
-            width: 380px;
+            padding: 40px 36px;
+            width: 340px;
+            text-align: center;
         }
         .login-card h1 {
             font-size: 22px;
@@ -34,46 +35,6 @@
             color: #888;
             margin-bottom: 28px;
         }
-        .form-group {
-            margin-bottom: 16px;
-        }
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            color: #aaa;
-            margin-bottom: 6px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 10px 14px;
-            background: #0f1117;
-            border: 1px solid #2a2d3a;
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .form-group input:focus {
-            border-color: #4ade80;
-        }
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: #4ade80;
-            color: #000;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 8px;
-            transition: background 0.2s;
-        }
-        .login-btn:hover { background: #22c55e; }
         .error-msg {
             background: #ef444422;
             border: 1px solid #ef444444;
@@ -83,28 +44,132 @@
             font-size: 13px;
             margin-bottom: 16px;
         }
+        .pin-display {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .pin-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #2a2d3a;
+            background: transparent;
+            transition: all 0.15s;
+        }
+        .pin-dot.filled {
+            background: #4ade80;
+            border-color: #4ade80;
+        }
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 260px;
+            margin: 0 auto;
+        }
+        .key {
+            padding: 16px;
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 22px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .key:hover { background: #22253a; border-color: #4ade80; }
+        .key:active { background: #4ade8030; }
+        .key-back {
+            font-size: 16px;
+            color: #888;
+        }
+        .key-go {
+            background: #4ade80;
+            color: #000;
+            border-color: #4ade80;
+            font-size: 16px;
+        }
+        .key-go:hover { background: #22c55e; }
+        .key-go:disabled { background: #333; color: #666; border-color: #333; cursor: default; }
     </style>
 </head>
 <body>
     <div class="login-card">
         <h1>MT<span>Scapes</span> Fleet</h1>
-        <div class="subtitle">Sign in to access the fleet dashboard</div>
+        <div class="subtitle">Enter your PIN to continue</div>
 
         {% if error %}
         <div class="error-msg">{{ error }}</div>
         {% endif %}
 
-        <form method="POST" action="/login">
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" autocomplete="username" autofocus required />
+        <form method="POST" action="/login" id="pinForm">
+            <input type="hidden" name="pin" id="pinInput" />
+
+            <div class="pin-display" id="pinDots">
+                <div class="pin-dot" id="d0"></div>
+                <div class="pin-dot" id="d1"></div>
+                <div class="pin-dot" id="d2"></div>
+                <div class="pin-dot" id="d3"></div>
+                <div class="pin-dot" id="d4"></div>
+                <div class="pin-dot" id="d5"></div>
             </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" autocomplete="current-password" required />
+
+            <div class="keypad">
+                <button type="button" class="key" onclick="addDigit('1')">1</button>
+                <button type="button" class="key" onclick="addDigit('2')">2</button>
+                <button type="button" class="key" onclick="addDigit('3')">3</button>
+                <button type="button" class="key" onclick="addDigit('4')">4</button>
+                <button type="button" class="key" onclick="addDigit('5')">5</button>
+                <button type="button" class="key" onclick="addDigit('6')">6</button>
+                <button type="button" class="key" onclick="addDigit('7')">7</button>
+                <button type="button" class="key" onclick="addDigit('8')">8</button>
+                <button type="button" class="key" onclick="addDigit('9')">9</button>
+                <button type="button" class="key key-back" onclick="backspace()">&#9003;</button>
+                <button type="button" class="key" onclick="addDigit('0')">0</button>
+                <button type="button" class="key key-go" id="goBtn" onclick="submitPin()" disabled>GO</button>
             </div>
-            <button type="submit" class="login-btn">Sign In</button>
         </form>
     </div>
+
+<script>
+let pin = '';
+const MAX_LEN = 6;
+
+function updateDots() {
+    for (let i = 0; i < MAX_LEN; i++) {
+        document.getElementById('d' + i).classList.toggle('filled', i < pin.length);
+    }
+    document.getElementById('goBtn').disabled = pin.length < 4;
+}
+
+function addDigit(d) {
+    if (pin.length >= MAX_LEN) return;
+    pin += d;
+    updateDots();
+}
+
+function backspace() {
+    pin = pin.slice(0, -1);
+    updateDots();
+}
+
+function submitPin() {
+    if (pin.length < 4) return;
+    document.getElementById('pinInput').value = pin;
+    document.getElementById('pinForm').submit();
+}
+
+// Keyboard support
+document.addEventListener('keydown', (e) => {
+    if (e.key >= '0' && e.key <= '9') addDigit(e.key);
+    else if (e.key === 'Backspace') backspace();
+    else if (e.key === 'Enter' && pin.length >= 4) submitPin();
+});
+</script>
 </body>
 </html>
