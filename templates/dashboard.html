@@ -691,7 +691,7 @@ let stopMarkers = [], tripPolyline = null;
 
 // ── Initialize Map ─────────────────────────────────────────────
 function initMap() {
-    map = L.map('map').setView([33.75, -84.39], 10); // Atlanta area
+    map = L.map('map').setView(ATL_CENTER, ATL_ZOOM);
     const streets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
         subdomains: ['mt0','mt1','mt2','mt3'],
         attribution: '&copy; Google',
@@ -935,12 +935,20 @@ function updateVehicleList(vehicles) {
 }
 
 // ── Map Markers ────────────────────────────────────────────────
+const ATL_CENTER = [33.75, -84.39];
+const ATL_ZOOM = 10;
+
+function isValidCoord(lat, lng) {
+    // Must be in reasonable US range — reject 0,0 and other junk coords
+    return lat > 20 && lat < 50 && lng < -60 && lng > -130;
+}
+
 function updateMapMarkers(vehicles) {
     vehicles.forEach(v => {
         const id = getVehicleId(v);
         const lat = getLat(v);
         const lng = getLng(v);
-        if (!lat && !lng) return;
+        if (!isValidCoord(lat, lng)) return;
 
         const speed = getSpeed(v);
         const division = getDivision(v);
@@ -982,10 +990,12 @@ function updateMapMarkers(vehicles) {
 
 function showAllVehicles() {
     const latlngs = allVehicles
-        .filter(v => getLat(v) && getLng(v))
+        .filter(v => isValidCoord(getLat(v), getLng(v)))
         .map(v => [getLat(v), getLng(v)]);
     if (latlngs.length) {
         map.fitBounds(latlngs, { padding: [40, 40] });
+    } else {
+        map.setView(ATL_CENTER, ATL_ZOOM);
     }
 }
 
@@ -1006,7 +1016,7 @@ function selectVehicle(vehicleId, sourceList) {
     document.querySelectorAll(`[data-id="${vehicleId}"]`).forEach(el => el.classList.add('active'));
 
     // Pan map to vehicle
-    if (v && getLat(v) && getLng(v)) {
+    if (v && isValidCoord(getLat(v), getLng(v))) {
         map.setView([getLat(v), getLng(v)], 13);
         if (vehicleMarkers[vehicleId]) vehicleMarkers[vehicleId].openPopup();
     }
@@ -1073,7 +1083,7 @@ async function loadBreadcrumbDots(vehicleId) {
 
         // Filter to valid points and sort by time
         const validPts = points.filter(pt => {
-            if (!pt.latitude || !pt.longitude || pt.latitude === -1) return false;
+            if (!isValidCoord(pt.latitude, pt.longitude)) return false;
             if ((pt.eventName || '').toLowerCase().includes('ignition off')) return false;
             return true;
         }).sort((a, b) => {
@@ -1116,10 +1126,14 @@ async function loadBreadcrumbDots(vehicleId) {
             stopMarkers.push(marker);
         });
 
-        // Fit map to breadcrumb bounds
-        const latlngs = validPts.map(p => [p.latitude, p.longitude]);
+        // Fit map to breadcrumb bounds (only valid US coords)
+        const latlngs = validPts
+            .filter(p => isValidCoord(p.latitude, p.longitude))
+            .map(p => [p.latitude, p.longitude]);
         if (latlngs.length > 1) {
             map.fitBounds(latlngs, { padding: [40, 40] });
+        } else if (latlngs.length === 1) {
+            map.setView(latlngs[0], 13);
         }
     } catch (err) {
         if (err.name === 'AbortError') {
