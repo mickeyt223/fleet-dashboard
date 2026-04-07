@@ -1411,13 +1411,13 @@ function stopAutoRefresh() {
 function formatTime(ts) {
     if (!ts) return '';
     try {
-        // Azuga timestamps have +00:00 but are ALREADY in Eastern time.
-        // Strip the timezone offset so the browser doesn't double-convert.
-        let s = String(ts);
-        if (s.includes('+')) s = s.substring(0, s.lastIndexOf('+'));
-        else if (s.endsWith('Z')) s = s.slice(0, -1);
-        const d = new Date(s);
-        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return ts;
+        // Always display in Eastern time regardless of user's browser timezone
+        return d.toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', hour12: true,
+            timeZone: 'America/New_York'
+        });
     } catch { return ts; }
 }
 
