@@ -1130,10 +1130,18 @@ async function loadBreadcrumbDots(vehicleId) {
         const latlngs = validPts
             .filter(p => isValidCoord(p.latitude, p.longitude))
             .map(p => [p.latitude, p.longitude]);
-        if (latlngs.length > 1) {
-            map.fitBounds(latlngs, { padding: [40, 40] });
-        } else if (latlngs.length === 1) {
-            map.setView(latlngs[0], 13);
+        function fitBreadcrumb() {
+            if (latlngs.length > 1) {
+                map.fitBounds(latlngs, { padding: [40, 40] });
+            } else if (latlngs.length === 1) {
+                map.setView(latlngs[0], 13);
+            }
+        }
+        // Fit now, and re-fit after mobile sidebar transition finishes
+        fitBreadcrumb();
+        if (window.innerWidth <= 768) {
+            setTimeout(() => { map.invalidateSize(); fitBreadcrumb(); }, 300);
+            setTimeout(() => { map.invalidateSize(); fitBreadcrumb(); }, 600);
         }
     } catch (err) {
         if (err.name === 'AbortError') {
