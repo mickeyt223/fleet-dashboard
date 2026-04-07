@@ -170,7 +170,7 @@ def get_breadcrumb(vehicle_id, start_date, end_date):
                 }
             },
             "index": 0,
-            "size": 5000,
+            "size": 10000,
             "desc": False,
         }
         return _retry_on_401(
@@ -224,10 +224,13 @@ def get_alerts_report(vehicle_ids=None, start_date=None, end_date=None):
 # ── Helpers ────────────────────────────────────────────────────────
 
 def _to_iso(date_str, start_of_day=True):
-    """Convert YYYY-MM-DD to ISO 8601 timestamp."""
+    """Convert YYYY-MM-DD to ISO 8601 timestamp.
+    Uses Eastern offset (-04:00 EDT) so date boundaries align with local time
+    instead of UTC, which was causing missing data in the morning/evening.
+    """
     if "T" in str(date_str):
         return date_str  # Already ISO
     if start_of_day:
-        return f"{date_str}T00:00:00.000Z"
+        return f"{date_str}T00:00:00.000-04:00"
     else:
-        return f"{date_str}T23:59:59.999Z"
+        return f"{date_str}T23:59:59.999-04:00"

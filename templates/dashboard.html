@@ -1090,7 +1090,7 @@ async function loadBreadcrumbDots(vehicleId) {
         }).sort((a, b) => {
             const ta = a.locationTimeInDTZ || a.locationTime || '';
             const tb = b.locationTimeInDTZ || b.locationTime || '';
-            return ta.localeCompare(tb);
+            return new Date(ta).getTime() - new Date(tb).getTime();
         });
 
         if (!validPts.length) return;  // No valid points — keep markers
@@ -1098,18 +1098,10 @@ async function loadBreadcrumbDots(vehicleId) {
         // Only hide other truck markers once we have confirmed breadcrumb data
         hideAllVehicleMarkers();
 
-        // First On = first "Ignition On" before noon ET (morning start only)
-        function getETHour(ts) {
-            try {
-                const d = new Date(ts);
-                return parseInt(d.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }));
-            } catch { return 99; }
-        }
-        const firstIgnitionIdx = validPts.findIndex(pt => {
-            if (!(pt.eventName || '').toLowerCase().includes('ignition on')) return false;
-            const ts = pt.locationTimeInDTZ || pt.locationTime || '';
-            return getETHour(ts) < 12;  // Only AM events
-        });
+        // First On = first "Ignition On" event of the day (any time)
+        const firstIgnitionIdx = validPts.findIndex(pt =>
+            (pt.eventName || '').toLowerCase().includes('ignition on')
+        );
 
         // Check if latest point is recent (within 30 min) to label as "Current"
         const lastTs = validPts[validPts.length - 1]?.locationTimeInDTZ || validPts[validPts.length - 1]?.locationTime || '';
