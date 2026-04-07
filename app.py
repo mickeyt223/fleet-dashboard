@@ -238,11 +238,49 @@ def debug_locations():
     try:
         data = azuga_api.get_latest_locations()
         vlist = _extract_vehicle_list(data)
+        # If ?search=name param, filter and return full vehicle data
+        search = request.args.get("search", "").lower()
+        if search:
+            matches = [v for v in vlist if search in (v.get("trackeeName","") or "").lower()
+                       or search in (v.get("firstName","") or "").lower()
+                       or search in (v.get("lastName","") or "").lower()]
+            return jsonify({"status": "ok", "matches": len(matches), "vehicles": matches})
         return jsonify({"status": "ok", "vehicle_count": len(vlist),
                         "response_type": type(data).__name__})
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[DEBUG] locations error:\n{tb}")
+        return jsonify({"status": "error", "error": str(e),
+                        "traceback": tb.split("\n")[-4:]}), 500
+
+@app.route("/api/debug-breadcrumb/<vehicle_id>")
+def debug_breadcrumb(vehicle_id):
+    """Debug endpoint — check raw breadcrumb data for a vehicle (no auth)."""
+    import traceback
+    try:
+        start = request.args.get("start", str(date.today()))
+        end = request.args.get("end", str(date.today()))
+        data = azuga_api.get_breadcrumb(vehicle_id, start, end)
+        points = _extract_vehicle_list(data)
+        # Return summary + first/last few points
+        summary = {
+            "status": "ok",
+            "total_points": len(points),
+            "start_query": start,
+            "end_query": end,
+        }
+        if points:
+            summary["first_3"] = points[:3]
+            summary["last_3"] = points[-3:]
+            # Count event types
+            events = {}
+            for p in points:
+                e = p.get("eventName", "unknown")
+                events[e] = events.get(e, 0) + 1
+            summary["event_counts"] = events
+        return jsonify(summary)
+    except Exception as e:
+        tb = traceback.format_exc()
         return jsonify({"status": "error", "error": str(e),
                         "traceback": tb.split("\n")[-4:]}), 500
 
