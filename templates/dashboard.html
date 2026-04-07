@@ -1045,7 +1045,8 @@ async function loadBreadcrumbDots(vehicleId) {
     // Clear previous overlays but keep vehicle markers visible until data loads
     clearMapOverlays();
 
-    const today = new Date().toISOString().split('T')[0];
+    // Use Eastern date (not UTC) so late-evening queries get the right day
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const cacheKey = `${vehicleId}:${today}`;
     try {
         let points;
@@ -1097,9 +1098,23 @@ async function loadBreadcrumbDots(vehicleId) {
         // Only hide other truck markers once we have confirmed breadcrumb data
         hideAllVehicleMarkers();
 
-        const firstIgnitionIdx = validPts.findIndex(pt =>
-            (pt.eventName || '').toLowerCase().includes('ignition on')
-        );
+        // First On = first "Ignition On" before noon ET (morning start only)
+        function getETHour(ts) {
+            try {
+                const d = new Date(ts);
+                return parseInt(d.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }));
+            } catch { return 99; }
+        }
+        const firstIgnitionIdx = validPts.findIndex(pt => {
+            if (!(pt.eventName || '').toLowerCase().includes('ignition on')) return false;
+            const ts = pt.locationTimeInDTZ || pt.locationTime || '';
+            return getETHour(ts) < 12;  // Only AM events
+        });
+
+        // Check if latest point is recent (within 30 min) to label as "Current"
+        const lastTs = validPts[validPts.length - 1]?.locationTimeInDTZ || validPts[validPts.length - 1]?.locationTime || '';
+        const lastTime = new Date(lastTs).getTime();
+        const isRecent = (Date.now() - lastTime) < 30 * 60 * 1000;
 
         validPts.forEach((pt, idx) => {
             const lat = pt.latitude, lng = pt.longitude;
@@ -1112,6 +1127,10 @@ async function loadBreadcrumbDots(vehicleId) {
             const dotColor = isLast ? '#ef4444' : isFirst ? '#4ade80' : divColor;
             const radius = (isLast || isFirst) ? 10 : 7;
 
+            let label = '';
+            if (isLast) label = isRecent ? '📍 Current — ' : '📍 Last Ping — ';
+            else if (isFirst) label = '🟢 First On — ';
+
             const marker = L.circleMarker([lat, lng], {
                 radius: radius,
                 color: '#fff',
@@ -1119,7 +1138,7 @@ async function loadBreadcrumbDots(vehicleId) {
                 fillOpacity: 0.9,
                 weight: 2,
             }).addTo(map).bindPopup(
-                `<b>${isLast ? '📍 Current — ' : isFirst ? '🟢 First On — ' : ''}${formatTime(ts)}</b><br>` +
+                `<b>${label}${formatTime(ts)}</b><br>` +
                 `${spd > 0 ? Math.round(spd) + ' mph' : 'Stopped'}<br>` +
                 `${addr}`
             );
