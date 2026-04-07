@@ -986,8 +986,8 @@ function selectVehicle(vehicleId, sourceList) {
 
     // Load today's breadcrumb on live map
     if (sourceList === 'vehicleList') {
-        loadBreadcrumbDots(vehicleId);
         mobileShowMap();
+        loadBreadcrumbDots(vehicleId);
     }
 }
 
@@ -1002,16 +1002,31 @@ function showAllVehicleMarkers() {
 }
 
 async function loadBreadcrumbDots(vehicleId) {
+    // Clear previous overlays but keep vehicle markers visible until data loads
     clearMapOverlays();
-    hideAllVehicleMarkers();
+
     const today = new Date().toISOString().split('T')[0];
     try {
-        const resp = await fetch(`/api/breadcrumb/${vehicleId}?start=${today}&end=${today}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        const resp = await fetch(`/api/breadcrumb/${vehicleId}?start=${today}&end=${today}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) {
+            console.error('Breadcrumb API error:', resp.status);
+            return;  // Keep vehicle markers visible
+        }
+
         const raw = await resp.json();
+        if (raw.error) {
+            console.error('Breadcrumb error:', raw.error);
+            return;
+        }
+
         const points = (raw.data && raw.data.result) ? raw.data.result
             : Array.isArray(raw.data) ? raw.data
             : Array.isArray(raw) ? raw : [];
-        if (!points.length) return;
+        if (!points.length) return;  // No data — keep markers visible
 
         const div = allVehicles.find(x => getVehicleId(x) === vehicleId);
         const divColor = div ? (DIVISION_COLORS[getDivision(div)]?.bg || '#4ade80') : '#4ade80';
@@ -1026,6 +1041,11 @@ async function loadBreadcrumbDots(vehicleId) {
             const tb = b.locationTimeInDTZ || b.locationTime || '';
             return ta.localeCompare(tb);
         });
+
+        if (!validPts.length) return;  // No valid points — keep markers
+
+        // Only hide other truck markers once we have confirmed breadcrumb data
+        hideAllVehicleMarkers();
 
         const firstIgnitionIdx = validPts.findIndex(pt =>
             (pt.eventName || '').toLowerCase().includes('ignition on')
@@ -1057,15 +1077,18 @@ async function loadBreadcrumbDots(vehicleId) {
         });
 
         // Fit map to breadcrumb bounds
-        const latlngs = points
-            .filter(p => p.latitude && p.longitude && p.latitude !== -1)
-            .filter(p => !(p.eventName || '').toLowerCase().includes('ignition off'))
-            .map(p => [p.latitude, p.longitude]);
+        const latlngs = validPts.map(p => [p.latitude, p.longitude]);
         if (latlngs.length > 1) {
             map.fitBounds(latlngs, { padding: [40, 40] });
         }
     } catch (err) {
-        console.error('Breadcrumb load error:', err);
+        if (err.name === 'AbortError') {
+            console.error('Breadcrumb fetch timed out');
+        } else {
+            console.error('Breadcrumb load error:', err);
+        }
+        // On failure, restore all vehicle markers so map isn't blank
+        showAllVehicleMarkers();
     }
 }
 
@@ -1280,7 +1303,8 @@ function mobileShowMap() {
         const sidebar = document.querySelector('.sidebar');
         sidebar.classList.add('collapsed');
         document.getElementById('mobileToggle').textContent = 'Show Trucks';
-        setTimeout(() => map.invalidateSize(), 100);
+        setTimeout(() => map.invalidateSize(), 150);
+        setTimeout(() => map.invalidateSize(), 400);
     }
 }
 
