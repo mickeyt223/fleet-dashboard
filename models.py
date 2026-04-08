@@ -4,7 +4,12 @@ import os
 import sqlite3
 from flask_login import UserMixin
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "fleet_users.db")
+_DEFAULT_DB = os.path.join(os.path.dirname(__file__), "fleet_users.db")
+DB_PATH = os.environ.get("DB_PATH", _DEFAULT_DB)
+# Ensure the parent directory exists (matters for mounted disks like /var/data)
+_db_dir = os.path.dirname(DB_PATH)
+if _db_dir and not os.path.exists(_db_dir):
+    os.makedirs(_db_dir, exist_ok=True)
 
 
 def get_db():
