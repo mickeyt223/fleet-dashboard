@@ -1422,9 +1422,15 @@ function stopAutoRefresh() {
 function formatTime(ts) {
     if (!ts) return '';
     try {
-        const d = new Date(ts);
+        // Azuga's locationTimeInDTZ contains Eastern wall-clock times tagged with +00:00 (a bug
+        // in their API). If we see that pattern, fix the offset before parsing so the displayed
+        // time matches the actual Eastern time. EDT = -04:00, EST = -05:00.
+        let fixed = ts;
+        if (typeof ts === 'string' && ts.endsWith('+00:00')) {
+            fixed = ts.replace('+00:00', '-04:00');
+        }
+        const d = new Date(fixed);
         if (isNaN(d.getTime())) return ts;
-        // Always display in Eastern time regardless of user's browser timezone
         return d.toLocaleTimeString('en-US', {
             hour: 'numeric', minute: '2-digit', hour12: true,
             timeZone: 'America/New_York'
